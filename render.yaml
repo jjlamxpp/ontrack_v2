@@ -13,7 +13,7 @@ services:
       gunicorn your_project_name.wsgi:application
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0  # or your Python version
+        value: 3.11.0  # or your Python version
       - key: DATABASE_URL
         value: your-database-url  # You'll set this in Render dashboard
       - key: DJANGO_SECRET_KEY
