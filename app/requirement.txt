@@ -166,12 +166,6 @@ spaces==0.30.4
 stack-data==0.6.3
 starlette==0.41.2
 sympy==1.13.1
-tensorboard==2.16.2
-tensorboard-data-server==0.7.2
-tensorflow==2.16.2
-tensorflow-io-gcs-filesystem==0.37.1
-tensorflow-macos==2.16.2
-tensorflow-metal==1.1.0
 termcolor==2.5.0
 terminado==0.18.1
 tinycss2==1.4.0
