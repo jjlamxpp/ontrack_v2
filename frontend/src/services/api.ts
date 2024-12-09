@@ -1,5 +1,5 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
-import { config } from '../config/env';
+import { config } from '../config';
 
 const API_BASE_URL = config.API_URL;
 
