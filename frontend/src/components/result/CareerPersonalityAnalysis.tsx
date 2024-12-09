@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from "react"
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts"
 import { Card, CardContent } from "@/components/ui/card"
 import type { PersonalityAnalysis } from '../../types/survey'
-import { config } from '../../config';
 
 interface Props {
   analysis: PersonalityAnalysis;
