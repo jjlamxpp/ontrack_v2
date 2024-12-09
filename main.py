@@ -16,12 +16,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Add the current directory to Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
-
 # Load environment variables
 load_dotenv()
+
+# Setup paths
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "app" / "static"
+logger.info(f"Base directory: {BASE_DIR}")
+logger.info(f"Static directory: {STATIC_DIR}")
 
 app = FastAPI(
     title="OnTrack API",
@@ -31,17 +33,16 @@ app = FastAPI(
 
 # Create necessary directories
 try:
-    static_dir = Path("static")
-    icon_dir = static_dir / "icon"
-    school_icon_dir = static_dir / "school_icon"
+    icon_dir = STATIC_DIR / "icon"
+    school_icon_dir = STATIC_DIR / "school_icon"
 
     # Create directories if they don't exist
-    static_dir.mkdir(parents=True, exist_ok=True)
+    STATIC_DIR.mkdir(parents=True, exist_ok=True)
     icon_dir.mkdir(parents=True, exist_ok=True)
     school_icon_dir.mkdir(parents=True, exist_ok=True)
 
     # Mount static files directory
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 except Exception as e:
     logger.error(f"Error setting up static directories: {str(e)}")
 
@@ -60,14 +61,13 @@ app.add_middleware(
 
 # Include routers
 try:
-    # Check if routers directory exists
-    routers_path = os.path.join(current_dir, "routers")
-    if not os.path.exists(routers_path):
-        logger.error(f"Routers directory not found at: {routers_path}")
-        raise ImportError("Routers directory not found")
-
-    # Try to import the survey router
-    from routers import survey
+    # Add app directory to Python path
+    app_path = os.path.join(BASE_DIR, "app")
+    if app_path not in sys.path:
+        sys.path.append(str(app_path))
+    logger.info(f"Added to Python path: {app_path}")
+    
+    from app.routers import survey
     logger.info("Successfully imported survey router")
     
     app.include_router(
@@ -77,12 +77,12 @@ try:
     )
 except Exception as e:
     logger.error(f"Error including routers: {str(e)}")
-    logger.error(f"Current directory: {current_dir}")
+    logger.error(f"Current directory: {os.getcwd()}")
     logger.error(f"Python path: {sys.path}")
     import traceback
     logger.error(traceback.format_exc())
 
-# Rest of your route handlers remain the same
+# Error handler for generic exceptions
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
     logger.error(f"Generic error: {str(exc)}")
@@ -94,8 +94,12 @@ async def generic_exception_handler(request, exc):
         }
     )
 
+# Add root route
 @app.get("/")
 async def root():
+    """
+    Root endpoint that provides API information and available endpoints
+    """
     return {
         "message": "Welcome to OnTrack API",
         "version": "2.0",
@@ -108,13 +112,18 @@ async def root():
         }
     }
 
+# Health check endpoint
 @app.get("/health")
 async def health_check():
+    """
+    Health check endpoint to verify API status
+    """
     return {
         "status": "healthy",
         "version": "2.0"
     }
 
+# Error handling for 404 Not Found
 @app.exception_handler(404)
 async def not_found_exception_handler(request, exc):
     return JSONResponse(
@@ -125,6 +134,7 @@ async def not_found_exception_handler(request, exc):
         }
     )
 
+# Validation error handler
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     return JSONResponse(
@@ -135,18 +145,21 @@ async def http_exception_handler(request, exc):
         }
     )
 
+# Development server configuration
 if __name__ == "__main__":
     import uvicorn
+    # Get port from environment variable or default to 8000
     port = int(os.getenv("PORT", 8000))
     
+    # Configure logging
     log_config = uvicorn.config.LOGGING_CONFIG
     log_config["formatters"]["access"]["fmt"] = "%(asctime)s - %(levelname)s - %(message)s"
     
     uvicorn.run(
-        app,  # Changed from "main:app" to app
+        app,
         host="0.0.0.0",
         port=port,
-        reload=True,
-        log_config=log_config,
-        workers=1  # Reduced workers for debugging
+        log_level="info",
+        reload=True,  # Enable auto-reload during development
+        workers=1  # Single worker for debugging
     )
