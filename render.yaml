@@ -1,28 +1,12 @@
 services:
   - type: web
-    name: ontrack-backend
+    name: my-web-service
     env: python
-    plan: free
-    region: singapore  # or choose your preferred region
-    buildCommand: |
-      cd backend
-      pip install -r requirements.txt
-      python manage.py collectstatic --noinput
-    startCommand: |
-      cd backend
-      gunicorn your_project_name.wsgi:application
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0  # or your Python version
       - key: DATABASE_URL
-        value: your-database-url  # You'll set this in Render dashboard
-      - key: DJANGO_SECRET_KEY
-        value: your-secret-key    # You'll set this in Render dashboard
-      - key: DJANGO_DEBUG
-        value: False
-    autoDeploy: true
-
-databases:
-  - name: ontrack_db
-    plan: free
-    region: singapore  # or choose your preferred region
+        value: <your-database-url>
+      - key: SECRET_KEY
+        value: <your-secret-key>
