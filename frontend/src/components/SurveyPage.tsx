@@ -1,11 +1,10 @@
 'use client'
 
+// Remove unused imports
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
 import type { Question } from '../types/survey';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 
 export function SurveyPage() {
