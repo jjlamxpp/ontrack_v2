@@ -128,16 +128,15 @@ export function RecommendedIndustry({ industries = [] }: Props) {
                       );
                     })()}
                   </div>
-
                   <div className="flex items-center justify-center h-full">
-                    <div className={`relative ${getSchoolLogoStyles(parseEducation(selectedIndustry.education || '').school)}`}>
+                    <div className={`relative ${getSchoolLogoStyles(school)}`}>
                       <img 
-                        src={`http://localhost:8000/api/survey/school-icon/${parseEducation(selectedIndustry.education || '').school}`}
-                        alt={`${parseEducation(selectedIndustry.education || '').school} Logo`}
+                        src={`${config.API_URL}/survey/school-icon/${school}`} // Use the API_URL from config
+                        alt={`${school} Logo`}
                         className="w-full h-full object-contain"
                         onError={(e) => {
-                          console.error('Failed to load school logo:', parseEducation(selectedIndustry.education || '').school);
-                          e.currentTarget.src = '/static/school_icon/default.png';
+                          console.error('Failed to load school logo:', school);
+                          e.currentTarget.src = '/static/school_icon/default.png'; // Fallback image
                         }}
                       />
                     </div>
