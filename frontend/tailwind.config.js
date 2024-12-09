@@ -9,6 +9,11 @@ export default {
       colors: {
         primary: "#1B2541",
         secondary: "#3B82F6",
+        background: "#1B2541",
+        foreground: "#FFFFFF",
+      },
+      borderColor: {
+        DEFAULT: "#3B82F6",
       },
     },
   },
