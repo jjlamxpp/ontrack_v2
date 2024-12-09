@@ -17,15 +17,30 @@ export function SurveyPage() {
     const loadQuestions = async () => {
       try {
         setLoading(true);
+        setError(null);
+        console.log('Starting to fetch questions...');
         const data = await fetchQuestions();
+        
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid response format');
+        }
+        
+        console.log('Questions loaded:', data);
         setQuestions(data);
+        
         const savedAnswers = localStorage.getItem('surveyAnswers');
         if (savedAnswers) {
-          setAnswers(JSON.parse(savedAnswers));
+          const parsed = JSON.parse(savedAnswers);
+          if (Array.isArray(parsed) && parsed.length === data.length) {
+            setAnswers(parsed);
+          } else {
+            setAnswers(new Array(data.length).fill(''));
+          }
         } else {
           setAnswers(new Array(data.length).fill(''));
         }
       } catch (err) {
+        console.error('Error in loadQuestions:', err);
         setError(err instanceof Error ? err.message : 'Failed to load questions');
       } finally {
         setLoading(false);
