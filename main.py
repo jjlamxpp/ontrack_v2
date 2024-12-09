@@ -22,8 +22,16 @@ load_dotenv()
 # Setup paths
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "app" / "static"
+DATABASE_DIR = BASE_DIR / "app" / "database"
+DATABASE_FILE = DATABASE_DIR / "Database.xlsx"
+
 logger.info(f"Base directory: {BASE_DIR}")
 logger.info(f"Static directory: {STATIC_DIR}")
+logger.info(f"Database directory: {DATABASE_DIR}")
+logger.info(f"Database file: {DATABASE_FILE}")
+
+# Set environment variable for database path
+os.environ['DATABASE_PATH'] = str(DATABASE_FILE)
 
 app = FastAPI(
     title="OnTrack API",
@@ -33,18 +41,22 @@ app = FastAPI(
 
 # Create necessary directories
 try:
+    # Create static directories
     icon_dir = STATIC_DIR / "icon"
     school_icon_dir = STATIC_DIR / "school_icon"
 
-    # Create directories if they don't exist
-    STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    icon_dir.mkdir(parents=True, exist_ok=True)
-    school_icon_dir.mkdir(parents=True, exist_ok=True)
+    for directory in [STATIC_DIR, icon_dir, school_icon_dir, DATABASE_DIR]:
+        directory.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created directory: {directory}")
 
     # Mount static files directory
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    # Check if database file exists
+    if not DATABASE_FILE.exists():
+        logger.error(f"Database file not found at {DATABASE_FILE}")
 except Exception as e:
-    logger.error(f"Error setting up static directories: {str(e)}")
+    logger.error(f"Error setting up directories: {str(e)}")
 
 # Configure CORS
 app.add_middleware(
@@ -58,29 +70,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Include routers
-try:
-    # Add app directory to Python path
-    app_path = os.path.join(BASE_DIR, "app")
-    if app_path not in sys.path:
-        sys.path.append(str(app_path))
-    logger.info(f"Added to Python path: {app_path}")
-    
-    from app.routers import survey
-    logger.info("Successfully imported survey router")
-    
-    app.include_router(
-        survey.router,
-        prefix="/api/survey",
-        tags=["survey"]
-    )
-except Exception as e:
-    logger.error(f"Error including routers: {str(e)}")
-    logger.error(f"Current directory: {os.getcwd()}")
-    logger.error(f"Python path: {sys.path}")
-    import traceback
-    logger.error(traceback.format_exc())
 
 # Error handler for generic exceptions
 @app.exception_handler(Exception)
@@ -120,7 +109,9 @@ async def health_check():
     """
     return {
         "status": "healthy",
-        "version": "2.0"
+        "version": "2.0",
+        "database_path": str(DATABASE_FILE),
+        "database_exists": DATABASE_FILE.exists()
     }
 
 # Error handling for 404 Not Found
@@ -144,6 +135,30 @@ async def http_exception_handler(request, exc):
             "status_code": exc.status_code
         }
     )
+
+# Include routers
+try:
+    # Add app directory to Python path
+    app_path = os.path.join(BASE_DIR, "app")
+    if app_path not in sys.path:
+        sys.path.append(str(app_path))
+    logger.info(f"Added to Python path: {app_path}")
+    
+    # Import and setup router
+    from app.routers import survey
+    logger.info("Successfully imported survey router")
+    
+    app.include_router(
+        survey.router,
+        prefix="/api/survey",
+        tags=["survey"]
+    )
+except Exception as e:
+    logger.error(f"Error including routers: {str(e)}")
+    logger.error(f"Current directory: {os.getcwd()}")
+    logger.error(f"Python path: {sys.path}")
+    import traceback
+    logger.error(traceback.format_exc())
 
 # Development server configuration
 if __name__ == "__main__":
