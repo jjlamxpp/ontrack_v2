@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts"
 import { Card, CardContent } from "@/components/ui/card"
 import type { PersonalityAnalysis } from '../../types/survey'
+import { config } from '../../config';
 
 interface Props {
   analysis: PersonalityAnalysis;
@@ -57,7 +58,7 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
             <div className="flex flex-col items-center justify-center p-8 h-[400px]">
               <div className="relative w-full h-full">
                 <img
-                  src={`${import.meta.env.VITE_API_URL}/api/survey/icon/${analysis.iconId}`}
+                  src={`${config.API_URL}/survey/icon/${analysis.iconId}`}
                   alt="Character Icon"
                   className="w-full h-full object-contain"
                 />
