@@ -57,7 +57,7 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
             <div className="flex flex-col items-center justify-center p-8 h-[400px]">
               <div className="relative w-full h-full">
                 <img
-                  src={`http://localhost:8000/api/survey/icon/${analysis.iconId}`}
+                  src={`${import.meta.env.VITE_API_URL}/api/survey/icon/${analysis.iconId}`}
                   alt="Character Icon"
                   className="w-full h-full object-contain"
                 />
