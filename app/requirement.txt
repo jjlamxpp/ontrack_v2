@@ -135,10 +135,6 @@ pydantic==2.9.2
 pydantic_core==2.23.4
 pydub==0.25.1
 Pygments==2.18.0
-pyobjc-core==0
-pyobjc-framework-Cocoa==0
-pyobjc-framework-CoreBluetooth==0
-pyobjc-framework-libdispatch==0
 pyparsing==3.1.4
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
