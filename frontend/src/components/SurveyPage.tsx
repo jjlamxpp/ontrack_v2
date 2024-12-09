@@ -1,6 +1,3 @@
-'use client'
-
-// Remove unused imports
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
@@ -62,20 +59,14 @@ export function SurveyPage() {
 
   const handleSubmit = async () => {
     try {
-      console.log('Starting submission...');
-      const allQuestionsAnswered = answers.every(answer => answer !== '');
-      if (!allQuestionsAnswered) {
+      if (!answers.every(answer => answer !== '')) {
         setError('Please answer all questions before submitting');
         return;
       }
 
       const result = await submitSurveyAndGetAnalysis(answers);
-      console.log('Analysis result:', result);
-      
-      // Save the result in localStorage before navigating
       localStorage.setItem('analysisResult', JSON.stringify(result));
       localStorage.removeItem('surveyAnswers');
-      
       navigate('/result');
     } catch (err) {
       console.error('Submission error:', err);
@@ -110,7 +101,6 @@ export function SurveyPage() {
   const questionsPerPage = 10;
   const startIndex = (currentPage - 1) * questionsPerPage;
   const currentQuestions = questions.slice(startIndex, startIndex + questionsPerPage);
-
   const isLastPage = currentPage === Math.ceil(questions.length / questionsPerPage);
   const isFirstPage = currentPage === 1;
 
