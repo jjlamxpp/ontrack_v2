@@ -9,4 +9,3 @@ services:
         value: 3.9.0
       - key: EXCEL_PATH
         value: /opt/render/project/src/app/database/Database.xlsx
-    python_version: 3.9.0
