@@ -8,7 +8,10 @@ from pathlib import Path
 import shutil
 
 router = APIRouter()
-db = SurveyDatabase("/Users/oscarsiu/Desktop/ontrack_v2/app/database/Database.xlsx")
+
+# Use environment variable for database path
+database_path = os.getenv('DATABASE_PATH')
+db = SurveyDatabase(database_path)
 
 # Initialize icon directories
 def init_icon_directories():
