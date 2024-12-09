@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { CareerPersonalityAnalysis } from "./CareerPersonalityAnalysis"
@@ -29,19 +27,13 @@ export function CareerAnalysis() {
   }, [navigate]);
 
   useEffect(() => {
-    // Add event listener for page refresh
     const handleBeforeUnload = () => {
       localStorage.removeItem('analysisResult');
-      navigate('/');
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // Cleanup
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [navigate]);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   if (!result) {
     return (
