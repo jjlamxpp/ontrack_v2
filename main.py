@@ -22,8 +22,8 @@ BASE_DIR = Path(__file__).resolve().parent
 
 # Create necessary directories
 static_dir = BASE_DIR / "static"
-icon_dir = static_dir / "icons"  # Changed from "icon" to "icons" for consistency
-school_icon_dir = static_dir / "school_logos"  # Changed from "school_icon" to "school_logos"
+icon_dir = static_dir / "icon"  # Changed from "icon" to "icons" for consistency
+school_icon_dir = static_dir / "school_icon"  # Changed from "school_icon" to "school_logos"
 
 # Create directories if they don't exist
 for directory in [static_dir, icon_dir, school_icon_dir]:
