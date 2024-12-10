@@ -1,16 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from pathlib import Path
 import logging
 import sys
 import os
-
-# Add the app directory to Python path
-current_dir = Path(__file__).resolve().parent
-if str(current_dir) not in sys.path:
-    sys.path.append(str(current_dir))
 
 # Set up logging
 logging.basicConfig(
@@ -21,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Get the base directory
+# Get base directory
 BASE_DIR = Path(__file__).resolve().parent
 
-# Create and configure static directories
+# Create necessary directories
 static_dir = BASE_DIR / "static"
-icon_dir = static_dir / "icons"
-school_icon_dir = static_dir / "school_logos"
+icon_dir = static_dir / "icons"  # Changed from "icon" to "icons" for consistency
+school_icon_dir = static_dir / "school_logos"  # Changed from "school_icon" to "school_logos"
 
 # Create directories if they don't exist
 for directory in [static_dir, icon_dir, school_icon_dir]:
@@ -37,54 +32,108 @@ for directory in [static_dir, icon_dir, school_icon_dir]:
 # Mount static files directory
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-# Configure CORS
+# Configure CORS for both development and production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://ontrack-v2.onrender.com",
-        "http://localhost:5173",
+        "https://ontrack-v2-1.onrender.com",  # Production frontend URL
+        "http://localhost:5173",            # Development frontend URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Error handler
-@app.exception_handler(404)
-async def custom_404_handler(request, exc):
-    if request.url.path.startswith("/api/survey/icon/"):
-        logger.warning(f"Icon not found: {request.url.path}")
-        return JSONResponse(
-            status_code=404,
-            content={"detail": "Icon not found"}
-        )
-    return JSONResponse(
-        status_code=404,
-        content={"detail": "Not found"}
-    )
-
-# Root route
+# Add root route
 @app.get("/")
 async def root():
     return {
         "message": "Welcome to OnTrack API",
         "version": "2.0",
-        "status": "running"
-    }
-
-# Health check
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "static_dirs": {
-            "base": str(static_dir),
-            "icons": str(icon_dir),
-            "school_logos": str(school_icon_dir)
+        "endpoints": {
+            "survey": "/api/survey/questions",
+            "submit": "/api/survey/submit",
+            "icons": "/api/survey/icon/{icon_id}",
+            "school_icons": "/api/survey/school-icon/{school}"
         }
     }
 
-# Import routers
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    try:
+        return {
+            "status": "healthy",
+            "static_directories": {
+                "static": str(static_dir),
+                "icons": str(icon_dir),
+                "school_logos": str(school_icon_dir)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Direct icon handling routes
+@app.get("/api/survey/icon/{icon_id}")
+async def get_icon(icon_id: str):
+    try:
+        # Clean the icon_id
+        clean_id = icon_id.replace('icon_', '').strip()
+        
+        # Try different extensions
+        for ext in ['.png', '.jpg', '.jpeg']:
+            icon_path = icon_dir / f"{clean_id}{ext}"
+            if icon_path.exists():
+                logger.info(f"Serving icon: {icon_path}")
+                return FileResponse(
+                    path=str(icon_path),
+                    media_type=f"image/{ext.replace('.', '')}"
+                )
+        
+        # If no icon found, try default
+        default_icon = icon_dir / "default-icon.png"
+        if default_icon.exists():
+            logger.info("Serving default icon")
+            return FileResponse(
+                path=str(default_icon),
+                media_type="image/png"
+            )
+        
+        raise HTTPException(status_code=404, detail="Icon not found")
+    except Exception as e:
+        logger.error(f"Error serving icon {icon_id}: {str(e)}")
+        raise HTTPException(status_code=404, detail="Icon not found")
+
+@app.get("/api/survey/school-icon/{school}")
+async def get_school_icon(school: str):
+    try:
+        # Clean the school name
+        clean_school = school.lower().replace(' ', '-').strip()
+        school_path = school_icon_dir / f"{clean_school}.png"
+        
+        if school_path.exists():
+            logger.info(f"Serving school icon: {school_path}")
+            return FileResponse(
+                path=str(school_path),
+                media_type="image/png"
+            )
+        
+        # If no school icon found, try default
+        default_school = school_icon_dir / "default-school.png"
+        if default_school.exists():
+            logger.info("Serving default school icon")
+            return FileResponse(
+                path=str(default_school),
+                media_type="image/png"
+            )
+        
+        raise HTTPException(status_code=404, detail="School icon not found")
+    except Exception as e:
+        logger.error(f"Error serving school icon {school}: {str(e)}")
+        raise HTTPException(status_code=404, detail="School icon not found")
+
+# Include routers
 try:
     from app.routers import survey
     app.include_router(
@@ -94,16 +143,18 @@ try:
     )
     logger.info("Successfully loaded survey router")
 except Exception as e:
-    logger.error(f"Failed to load survey router: {e}")
+    logger.error(f"Failed to load survey router: {str(e)}")
     raise
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Get port from environment variable or use default
     port = int(os.getenv("PORT", 8000))
     
     uvicorn.run(
-        "app.main:app",
+        "main:app",
         host="0.0.0.0",
         port=port,
-        reload=False
+        reload=False  # Disable reload in production
     )
