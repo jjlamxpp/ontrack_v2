@@ -6,6 +6,7 @@ from pathlib import Path
 import logging
 import sys
 import os
+import shutil
 
 # Set up logging
 logging.basicConfig(
