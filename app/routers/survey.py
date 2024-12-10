@@ -151,32 +151,14 @@ async def submit_survey(response: SurveyResponse):
 
 @router.get("/icon/{icon_id}")
 async def get_icon(icon_id: str):
-    try:
-        # Updated path without double 'app'
-        icon_dir = Path("static/icon")
-        icon_path = icon_dir / f"{icon_id}.png"
-        
-        if not icon_path.exists():
-            icon_path = icon_dir / "default.png"
-            if not icon_path.exists():
-                raise HTTPException(status_code=404, detail="Icon not found")
-        
-        return FileResponse(str(icon_path))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error serving icon: {str(e)}")
+    icon_path = f"assets/icons/{icon_id}.png"  # Adjust path as needed
+    if not os.path.exists(icon_path):
+        raise HTTPException(status_code=404, detail="Icon not found")
+    return FileResponse(icon_path)
 
-@router.get("/school-icon/{school}")
-async def get_school_icon(school: str):
-    try:
-        # Updated path without double 'app'
-        school_icon_dir = Path("static/school_icon")
-        icon_path = school_icon_dir / f"{school}.png"
-        
-        if not icon_path.exists():
-            icon_path = school_icon_dir / "default.png"
-            if not icon_path.exists():
-                raise HTTPException(status_code=404, detail="School icon not found")
-        
-        return FileResponse(str(icon_path))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error serving school icon: {str(e)}")
+@router.get("/school-icon/{school_code}")
+async def get_school_icon(school_code: str):
+    icon_path = f"assets/school-icons/{school_code}.png"  # Adjust path as needed
+    if not os.path.exists(icon_path):
+        raise HTTPException(status_code=404, detail="School icon not found")
+    return FileResponse(icon_path)
