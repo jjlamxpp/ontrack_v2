@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from database.excel_db import SurveyDatabase
-from schemas.models import Question, SurveyResponse
+from app.database.excel_db import SurveyDatabase
+from app.schemas.models import Question, SurveyResponse
 import logging
 from fastapi.responses import FileResponse
 import os
