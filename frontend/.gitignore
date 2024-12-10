@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Don't ignore static files
+!app/static/
+!app/static/icons/*.png
+!app/static/school_logos/*.png
