@@ -149,50 +149,74 @@ async def submit_survey(response: SurveyResponse):
             detail=f"Error processing survey: {str(e)}"
         )
 
-@router.get("/survey/icon/{icon_id}")
-async def get_icon(icon_id: str):
+@router.get("/survey/icon/{filename}")
+async def get_icon(filename: str):
     try:
-        # Clean the icon_id
-        icon_id = icon_id.replace('icon_', '').strip()
+        # Ensure filename ends with .png
+        if not filename.endswith('.png'):
+            filename = f"{filename}.png"
+            
+        # Clean the filename
+        clean_filename = filename.replace(' ', '').replace('HTTP', '').strip()
         
-        # Define paths
-        icons_dir = BASE_DIR / "static" / "icons"
-        icon_path = icons_dir / f"{icon_id}.png"
-        default_icon = icons_dir / "default-icon.png"
-
-        # Check if icon exists
+        # Construct the full path
+        icon_path = BASE_DIR / "static" / "icons" / clean_filename
+        default_icon = BASE_DIR / "static" / "icons" / "default-icon.png"
+        
+        print(f"Looking for icon at: {icon_path}")
+        
         if icon_path.exists():
-            return FileResponse(str(icon_path))
+            return FileResponse(
+                path=str(icon_path),
+                media_type="image/png",
+                filename=clean_filename
+            )
         else:
-            print(f"Icon not found: {icon_path}")
+            print(f"Icon not found at {icon_path}, using default")
             if default_icon.exists():
-                return FileResponse(str(default_icon))
-            else:
-                raise HTTPException(status_code=404, detail="Icon not found")
+                return FileResponse(
+                    path=str(default_icon),
+                    media_type="image/png",
+                    filename="default-icon.png"
+                )
+            raise HTTPException(status_code=404, detail="Icon not found")
+            
     except Exception as e:
         print(f"Error serving icon: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
-router.get("/survey/school-icon/{school}")
-async def get_school_icon(school: str):
+@router.get("/survey/school-icon/{filename}")
+async def get_school_logo(filename: str):
     try:
-        # Clean the school name
-        school = school.lower().strip()
+        # Ensure filename ends with .png
+        if not filename.endswith('.png'):
+            filename = f"{filename}.png"
+            
+        # Clean the filename
+        clean_filename = filename.lower().replace(' ', '-').replace('http', '').strip()
         
-        # Define paths
-        logos_dir = BASE_DIR / "static" / "school_icon"
-        logo_path = logos_dir / f"{school}.png"
-        default_logo = logos_dir / "default-school.png"
-
-        # Check if logo exists
+        # Construct the full path
+        logo_path = BASE_DIR / "static" / "school_logos" / clean_filename
+        default_logo = BASE_DIR / "static" / "school_logos" / "default-school.png"
+        
+        print(f"Looking for school logo at: {logo_path}")
+        
         if logo_path.exists():
-            return FileResponse(str(logo_path))
+            return FileResponse(
+                path=str(logo_path),
+                media_type="image/png",
+                filename=clean_filename
+            )
         else:
-            print(f"School logo not found: {logo_path}")
+            print(f"School logo not found at {logo_path}, using default")
             if default_logo.exists():
-                return FileResponse(str(default_logo))
-            else:
-                raise HTTPException(status_code=404, detail="School logo not found")
+                return FileResponse(
+                    path=str(default_logo),
+                    media_type="image/png",
+                    filename="default-school.png"
+                )
+            raise HTTPException(status_code=404, detail="School logo not found")
+            
     except Exception as e:
         print(f"Error serving school logo: {e}")
         raise HTTPException(status_code=404, detail=str(e))
