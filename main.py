@@ -4,9 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from pathlib import Path
 import logging
+import shutil
 import sys
 import os
-import shutil
 
 # Set up logging
 logging.basicConfig(
@@ -17,28 +17,24 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Get base directory
+# Get base directory and app directory
 BASE_DIR = Path(__file__).resolve().parent
+APP_DIR = BASE_DIR / "app"
 
-# Create necessary directories
-static_dir = BASE_DIR / "static"
-icon_dir = static_dir / "icon"  # Changed from "icon" to "icons" for consistency
-school_icon_dir = static_dir / "school_icon"  # Changed from "school_icon" to "school_logos"
+# Define static directories within app folder
+app_static_dir = APP_DIR / "static"
+app_icon_dir = app_static_dir / "icon"
+app_school_icon_dir = app_static_dir / "school_icon"
 
-# Create directories if they don't exist
-for directory in [static_dir, icon_dir, school_icon_dir]:
-    directory.mkdir(parents=True, exist_ok=True)
-    logger.info(f"Created/verified directory: {directory}")
-
-# Mount static files directory
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Mount static files directory directly from app folder
+app.mount("/static", StaticFiles(directory=str(app_static_dir)), name="static")
 
 # Configure CORS for both development and production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://ontrack-v2-1.onrender.com",  # Production frontend URL
-        "http://localhost:5173",            # Development frontend URL
+        "http://localhost:5173",              # Development frontend URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -66,29 +62,47 @@ async def health_check():
         return {
             "status": "healthy",
             "static_directories": {
-                "static": str(static_dir),
-                "icons": str(icon_dir),
-                "school_logos": str(school_icon_dir)
+                "app_static": str(app_static_dir),
+                "icon": str(app_icon_dir),
+                "school_icon": str(app_school_icon_dir)
+            },
+            "directories_exist": {
+                "app_static": app_static_dir.exists(),
+                "icon": app_icon_dir.exists(),
+                "school_icon": app_school_icon_dir.exists()
             }
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# Check static files endpoint
+@app.get("/check-static")
+async def check_static():
+    return {
+        "icon_dir_exists": app_icon_dir.exists(),
+        "school_icon_dir_exists": app_school_icon_dir.exists(),
+        "icon_files": [str(f.name) for f in app_icon_dir.glob("*") if f.is_file()],
+        "school_icon_files": [str(f.name) for f in app_school_icon_dir.glob("*") if f.is_file()],
+        "icon_dir_path": str(app_icon_dir),
+        "school_icon_dir_path": str(app_school_icon_dir)
+    }
+
+# Direct icon handling routes
 @app.get("/api/survey/icon/{icon_id}")
 async def get_icon(icon_id: str):
     try:
         # Clean the icon_id
         clean_id = icon_id.replace('icon_', '').strip()
         logger.info(f"Looking for icon with ID: {clean_id}")
-        logger.info(f"Searching in directory: {icon_dir}")
+        logger.info(f"Searching in directory: {app_icon_dir}")
         
         # List all files in the directory for debugging
-        logger.info(f"Available files in icon directory: {list(icon_dir.glob('*'))}")
+        logger.info(f"Available files in icon directory: {list(app_icon_dir.glob('*'))}")
         
         # Try different extensions
         for ext in ['.png', '.jpg', '.jpeg']:
-            icon_path = icon_dir / f"{clean_id}{ext}"
+            icon_path = app_icon_dir / f"{clean_id}{ext}"
             logger.info(f"Trying path: {icon_path}")
             if icon_path.exists():
                 logger.info(f"Found icon at: {icon_path}")
@@ -98,7 +112,7 @@ async def get_icon(icon_id: str):
                 )
         
         # If no icon found, try default
-        default_icon = icon_dir / "default-icon.png"
+        default_icon = app_icon_dir / "default-icon.png"
         if default_icon.exists():
             logger.info("Using default icon")
             return FileResponse(
@@ -118,10 +132,10 @@ async def get_school_icon(school: str):
         # Clean the school name
         clean_school = school.lower().strip()
         logger.info(f"Looking for school icon: {clean_school}")
-        logger.info(f"Searching in directory: {school_icon_dir}")
+        logger.info(f"Searching in directory: {app_school_icon_dir}")
         
         # List all files in the directory for debugging
-        logger.info(f"Available files in school_icon directory: {list(school_icon_dir.glob('*'))}")
+        logger.info(f"Available files in school_icon directory: {list(app_school_icon_dir.glob('*'))}")
         
         # Try with different possible filenames
         possible_names = [
@@ -131,7 +145,7 @@ async def get_school_icon(school: str):
         ]
         
         for filename in possible_names:
-            school_path = school_icon_dir / filename
+            school_path = app_school_icon_dir / filename
             logger.info(f"Trying path: {school_path}")
             if school_path.exists():
                 logger.info(f"Found school icon at: {school_path}")
@@ -141,7 +155,7 @@ async def get_school_icon(school: str):
                 )
         
         # If no school icon found, try default
-        default_school = school_icon_dir / "default-school.png"
+        default_school = app_school_icon_dir / "default-school.png"
         if default_school.exists():
             logger.info("Using default school icon")
             return FileResponse(
@@ -154,8 +168,12 @@ async def get_school_icon(school: str):
     except Exception as e:
         logger.error(f"Error serving school icon {school}: {str(e)}")
         raise HTTPException(status_code=404, detail="School icon not found")
+
 # Include routers
 try:
+    # Add the project root to Python path
+    sys.path.append(str(BASE_DIR))
+    
     from app.routers import survey
     app.include_router(
         survey.router,
