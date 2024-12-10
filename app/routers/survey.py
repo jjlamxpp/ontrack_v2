@@ -149,16 +149,50 @@ async def submit_survey(response: SurveyResponse):
             detail=f"Error processing survey: {str(e)}"
         )
 
-@router.get("/icon/{icon_id}")
+@router.get("/survey/icon/{icon_id}")
 async def get_icon(icon_id: str):
-    icon_path = f"assets/icons/{icon_id}.png"  # Adjust path as needed
-    if not os.path.exists(icon_path):
-        raise HTTPException(status_code=404, detail="Icon not found")
-    return FileResponse(icon_path)
+    try:
+        # Clean the icon_id
+        icon_id = icon_id.replace('icon_', '').strip()
+        
+        # Define paths
+        icons_dir = BASE_DIR / "static" / "icons"
+        icon_path = icons_dir / f"{icon_id}.png"
+        default_icon = icons_dir / "default-icon.png"
 
-@router.get("/school-icon/{school_code}")
-async def get_school_icon(school_code: str):
-    icon_path = f"assets/school-icons/{school_code}.png"  # Adjust path as needed
-    if not os.path.exists(icon_path):
-        raise HTTPException(status_code=404, detail="School icon not found")
-    return FileResponse(icon_path)
+        # Check if icon exists
+        if icon_path.exists():
+            return FileResponse(str(icon_path))
+        else:
+            print(f"Icon not found: {icon_path}")
+            if default_icon.exists():
+                return FileResponse(str(default_icon))
+            else:
+                raise HTTPException(status_code=404, detail="Icon not found")
+    except Exception as e:
+        print(f"Error serving icon: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+
+router.get("/survey/school-icon/{school}")
+async def get_school_icon(school: str):
+    try:
+        # Clean the school name
+        school = school.lower().strip()
+        
+        # Define paths
+        logos_dir = BASE_DIR / "static" / "school_icon"
+        logo_path = logos_dir / f"{school}.png"
+        default_logo = logos_dir / "default-school.png"
+
+        # Check if logo exists
+        if logo_path.exists():
+            return FileResponse(str(logo_path))
+        else:
+            print(f"School logo not found: {logo_path}")
+            if default_logo.exists():
+                return FileResponse(str(default_logo))
+            else:
+                raise HTTPException(status_code=404, detail="School logo not found")
+    except Exception as e:
+        print(f"Error serving school logo: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
