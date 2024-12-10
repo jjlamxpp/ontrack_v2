@@ -44,40 +44,46 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
 // Get character icon with proper error handling
 export async function getCharacterIcon(iconId: string): Promise<string> {
     try {
-        // Convert iconId to proper format (e.g., "icon_23" instead of just "23")
-        const formattedIconId = `icon_${iconId}`;
-        console.log('Fetching icon:', formattedIconId);
+        // Ensure iconId is properly formatted
+        const cleanIconId = iconId.replace(/\D/g, ''); // Remove any non-digits
+        const url = `${API_BASE_URL}/survey/icon/${cleanIconId}.png`; // Add .png extension
         
-        const response = await fetch(`${API_BASE_URL}/survey/icon/${formattedIconId}`);
+        console.log('Fetching icon from:', url);
+        const response = await fetch(url);
         
         if (!response.ok) {
-            console.error(`Failed to load icon ${formattedIconId}, status: ${response.status}`);
-            return '/icons/default-personality.png'; // Fallback icon
+            console.error(`Failed to load icon ${cleanIconId}, status: ${response.status}`);
+            return '/default-icon.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading character icon:', error);
-        return '/icons/default-personality.png'; // Fallback icon
+        return '/default-icon.png';
     }
 }
 
 // Get school logo
 export async function getSchoolLogo(school: string): Promise<string> {
     try {
-        const formattedSchool = school.toLowerCase().replace(/\s+/g, '-');
-        const response = await fetch(`${API_BASE_URL}/survey/school-icon/${formattedSchool}`);
+        // Format school name properly
+        const cleanSchool = school.toLowerCase().replace(/\s+/g, '-');
+        const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`; // Add .png extension
+        
+        console.log('Fetching school logo from:', url);
+        const response = await fetch(url);
         
         if (!response.ok) {
-            return '/icons/default-school.png'; // Fallback school icon
+            console.error(`Failed to load school logo for ${school}, status: ${response.status}`);
+            return '/default-school.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading school logo:', error);
-        return '/icons/default-school.png'; // Fallback school icon
+        return '/default-school.png';
     }
 }
 
