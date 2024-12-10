@@ -10,7 +10,7 @@ import shutil
 router = APIRouter()
 
 # Use environment variable for database path
-database_path = os.getenv('DATABASE_PATH')
+database_path = "app/database/Database.xlsx"
 db = SurveyDatabase(database_path)
 
 # Initialize icon directories
