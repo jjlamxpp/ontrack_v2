@@ -5,37 +5,25 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        console.log('Fetching questions from:', `${API_BASE_URL}/survey/questions`);
-        const response = await fetch(`${API_BASE_URL}/survey/questions`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-        });
-
+        const response = await fetch(`${API_BASE_URL}/survey/questions`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-
         const data = await response.json();
-        console.log('Received questions:', data);
         return data;
     } catch (error) {
         console.error('Error fetching questions:', error);
-        throw new Error('Failed to load questions. Please try again later.');
+        throw error;
     }
 }
 
-// Submit survey answers and get analysis
+// Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        console.log('Submitting answers:', answers);
         const response = await fetch(`${API_BASE_URL}/survey/submit`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
             },
             body: JSON.stringify({ answers }),
         });
@@ -44,80 +32,58 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const data = await response.json();
-        console.log('Analysis result:', data);
-        return data;
+        const result = await response.json();
+        console.log('Analysis result:', result);
+        return result;
     } catch (error) {
         console.error('Error submitting survey:', error);
-        throw new Error('Failed to submit survey. Please try again.');
+        throw error;
     }
 }
 
-// Fetch character icon
+// Get character icon with proper error handling
 export async function getCharacterIcon(iconId: string): Promise<string> {
     try {
-        console.log('Fetching character icon:', iconId);
-        const response = await fetch(`${API_BASE_URL}/survey/icon/${iconId}`, {
-            method: 'GET',
-            headers: {
-                'Access-Control-Allow-Origin': '*'
-            },
-        });
-
+        // Convert iconId to proper format (e.g., "icon_23" instead of just "23")
+        const formattedIconId = `icon_${iconId}`;
+        console.log('Fetching icon:', formattedIconId);
+        
+        const response = await fetch(`${API_BASE_URL}/survey/icon/${formattedIconId}`);
+        
         if (!response.ok) {
-            throw new Error(`Failed to load character icon: ${response.status}`);
+            console.error(`Failed to load icon ${formattedIconId}, status: ${response.status}`);
+            return '/icons/default-personality.png'; // Fallback icon
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading character icon:', error);
-        return '/fallback-icon.png';
+        return '/icons/default-personality.png'; // Fallback icon
     }
 }
 
-// Fetch school logo
+// Get school logo
 export async function getSchoolLogo(school: string): Promise<string> {
     try {
-        console.log('Fetching school logo:', school);
-        const response = await fetch(`${API_BASE_URL}/survey/school-icon/${school}`, {
-            method: 'GET',
-            headers: {
-                'Access-Control-Allow-Origin': '*'
-            },
-        });
-
+        const formattedSchool = school.toLowerCase().replace(/\s+/g, '-');
+        const response = await fetch(`${API_BASE_URL}/survey/school-icon/${formattedSchool}`);
+        
         if (!response.ok) {
-            throw new Error(`Failed to load school logo: ${response.status}`);
+            return '/icons/default-school.png'; // Fallback school icon
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading school logo:', error);
-        return '/fallback-school-icon.png';
+        return '/icons/default-school.png'; // Fallback school icon
     }
 }
 
-// Clean up blob URLs
+// Cleanup function for blob URLs
 export function cleanupBlobUrl(url: string): void {
     if (url && url.startsWith('blob:')) {
         URL.revokeObjectURL(url);
     }
-}
-
-// Helper function to handle API errors
-export function handleApiError(error: unknown): never {
-    if (error instanceof Error) {
-        throw new Error(error.message);
-    }
-    throw new Error('An unexpected error occurred');
-}
-
-// Validate API response
-export function validateApiResponse<T>(data: unknown): T {
-    if (!data) {
-        throw new Error('Invalid API response: No data received');
-    }
-    return data as T;
 }
