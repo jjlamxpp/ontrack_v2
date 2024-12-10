@@ -75,18 +75,23 @@ async def health_check():
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# Direct icon handling routes
 @app.get("/api/survey/icon/{icon_id}")
 async def get_icon(icon_id: str):
     try:
         # Clean the icon_id
         clean_id = icon_id.replace('icon_', '').strip()
+        logger.info(f"Looking for icon with ID: {clean_id}")
+        logger.info(f"Searching in directory: {icon_dir}")
+        
+        # List all files in the directory for debugging
+        logger.info(f"Available files in icon directory: {list(icon_dir.glob('*'))}")
         
         # Try different extensions
         for ext in ['.png', '.jpg', '.jpeg']:
             icon_path = icon_dir / f"{clean_id}{ext}"
+            logger.info(f"Trying path: {icon_path}")
             if icon_path.exists():
-                logger.info(f"Serving icon: {icon_path}")
+                logger.info(f"Found icon at: {icon_path}")
                 return FileResponse(
                     path=str(icon_path),
                     media_type=f"image/{ext.replace('.', '')}"
@@ -95,12 +100,13 @@ async def get_icon(icon_id: str):
         # If no icon found, try default
         default_icon = icon_dir / "default-icon.png"
         if default_icon.exists():
-            logger.info("Serving default icon")
+            logger.info("Using default icon")
             return FileResponse(
                 path=str(default_icon),
                 media_type="image/png"
             )
         
+        logger.error(f"No icon found for ID {clean_id}")
         raise HTTPException(status_code=404, detail="Icon not found")
     except Exception as e:
         logger.error(f"Error serving icon {icon_id}: {str(e)}")
@@ -110,30 +116,44 @@ async def get_icon(icon_id: str):
 async def get_school_icon(school: str):
     try:
         # Clean the school name
-        clean_school = school.lower().replace(' ', '-').strip()
-        school_path = school_icon_dir / f"{clean_school}.png"
+        clean_school = school.lower().strip()
+        logger.info(f"Looking for school icon: {clean_school}")
+        logger.info(f"Searching in directory: {school_icon_dir}")
         
-        if school_path.exists():
-            logger.info(f"Serving school icon: {school_path}")
-            return FileResponse(
-                path=str(school_path),
-                media_type="image/png"
-            )
+        # List all files in the directory for debugging
+        logger.info(f"Available files in school_icon directory: {list(school_icon_dir.glob('*'))}")
+        
+        # Try with different possible filenames
+        possible_names = [
+            f"{clean_school}.png",
+            f"{clean_school.replace(' ', '-')}.png",
+            f"{clean_school.replace(' ', '_')}.png"
+        ]
+        
+        for filename in possible_names:
+            school_path = school_icon_dir / filename
+            logger.info(f"Trying path: {school_path}")
+            if school_path.exists():
+                logger.info(f"Found school icon at: {school_path}")
+                return FileResponse(
+                    path=str(school_path),
+                    media_type="image/png"
+                )
         
         # If no school icon found, try default
         default_school = school_icon_dir / "default-school.png"
         if default_school.exists():
-            logger.info("Serving default school icon")
+            logger.info("Using default school icon")
             return FileResponse(
                 path=str(default_school),
                 media_type="image/png"
             )
         
+        logger.error(f"No school icon found for {school}")
         raise HTTPException(status_code=404, detail="School icon not found")
     except Exception as e:
         logger.error(f"Error serving school icon {school}: {str(e)}")
         raise HTTPException(status_code=404, detail="School icon not found")
-
 # Include routers
 try:
     from app.routers import survey
