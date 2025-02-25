@@ -2,10 +2,17 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { WelcomePage } from './components/WelcomePage';
 import { SurveyPage } from './components/SurveyPage';
 import { CareerAnalysis } from './components/result/CareerAnalysis';
+import { useEffect } from 'react';
 
 function App() {
   // Get the base URL from environment or default to '/'
   const baseUrl = import.meta.env.BASE_URL || '/';
+
+  // Log routing information for debugging
+  useEffect(() => {
+    console.log('App mounted, baseUrl:', baseUrl);
+    console.log('Current location:', window.location.pathname);
+  }, [baseUrl]);
 
   return (
     <Router basename={baseUrl}>
