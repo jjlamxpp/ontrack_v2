@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
@@ -11,43 +11,81 @@ export function SurveyPage() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentPage = questionId ? parseInt(questionId) : 1;
+  
+  // Validate and get current page
+  const currentPage = (() => {
+    const page = questionId ? parseInt(questionId) : 1;
+    return isNaN(page) || page < 1 ? 1 : page;
+  })();
+
+  // Add this new effect for route protection
+  useEffect(() => {
+    if (!questionId || isNaN(parseInt(questionId))) {
+      navigate('/survey/1', { replace: true });
+    }
+  }, [questionId, navigate]);
 
   useEffect(() => {
     const loadQuestions = async () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Starting to fetch questions...');
         const data = await fetchQuestions();
         
         if (!Array.isArray(data)) {
           throw new Error('Invalid response format');
         }
         
-        console.log('Questions loaded:', data);
         setQuestions(data);
         
+        // Initialize or restore answers
         const savedAnswers = localStorage.getItem('surveyAnswers');
+        let parsedAnswers = new Array(data.length).fill('');
+        
         if (savedAnswers) {
-          const parsed = JSON.parse(savedAnswers);
-          if (Array.isArray(parsed) && parsed.length === data.length) {
-            setAnswers(parsed);
-          } else {
-            setAnswers(new Array(data.length).fill(''));
+          try {
+            const parsed = JSON.parse(savedAnswers);
+            if (Array.isArray(parsed) && parsed.length === data.length) {
+              parsedAnswers = parsed;
+            }
+          } catch (e) {
+            console.error('Error parsing saved answers');
+            localStorage.removeItem('surveyAnswers');
           }
-        } else {
-          setAnswers(new Array(data.length).fill(''));
         }
+        
+        setAnswers(parsedAnswers);
+        
+        // Validate current page
+        const maxPages = Math.ceil(data.length / 10);
+        if (currentPage > maxPages) {
+          navigate('/survey/1', { replace: true });
+        }
+        
       } catch (err) {
-        console.error('Error in loadQuestions:', err);
         setError(err instanceof Error ? err.message : 'Failed to load questions');
+        navigate('/survey/1', { replace: true });
       } finally {
         setLoading(false);
       }
     };
 
     loadQuestions();
+  }, []);
+
+  // Add this function to handle refresh
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    e.preventDefault();
+    // Optionally clear answers on refresh
+    // localStorage.removeItem('surveyAnswers');
+    return e.returnValue = '';
+  };
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   useEffect(() => {
