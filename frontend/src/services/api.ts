@@ -2,15 +2,7 @@ import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
 // Use the current window location to determine the API URL
 const API_BASE_URL = (() => {
-  // Get the current hostname
-  const hostname = window.location.hostname;
-  
-  // If we're on localhost, use the local development server
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:8000/api';
-  }
-  
-  // Otherwise, use the same domain as the current page
+  // Always use the same origin for API requests
   return `${window.location.origin}/api`;
 })();
 
