@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.database.excel_db import SurveyDatabase
 from app.schemas.models import Question, SurveyResponse
 import logging
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import os
 from pathlib import Path
 import shutil
@@ -220,3 +220,33 @@ async def get_school_logo(filename: str):
     except Exception as e:
         print(f"Error serving school logo: {e}")
         raise HTTPException(status_code=404, detail=str(e))
+
+# Add this new endpoint for testing API connectivity
+@router.get("/test")
+async def test_survey_api():
+    """Test endpoint to verify API connectivity"""
+    logger.info("Test survey API endpoint called")
+    try:
+        # Try to access the database
+        question_count = len(db.get_questions())
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "ok",
+                "message": "Survey API is working",
+                "question_count": question_count,
+                "database_path": database_path,
+                "database_exists": os.path.exists(database_path)
+            }
+        )
+    except Exception as e:
+        logger.error(f"Test API error: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": str(e),
+                "database_path": database_path,
+                "database_exists": os.path.exists(database_path)
+            }
+        )
