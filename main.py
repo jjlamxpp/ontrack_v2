@@ -185,12 +185,6 @@ async def serve_frontend(full_path: str):
         logger.info(f"Skipping SPA handler for non-frontend path: {full_path}")
         raise HTTPException(status_code=404, detail="Not found")
     
-    # Check if it's a direct file
-    direct_path = frontend_dir / full_path
-    if direct_path.exists() and direct_path.is_file():
-        logger.info(f"Serving direct file: {direct_path}")
-        return FileResponse(str(direct_path))
-    
     # For all other routes, serve index.html
     index_path = frontend_dir / "index.html"
     if index_path.exists():
