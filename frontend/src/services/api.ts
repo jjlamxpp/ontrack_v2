@@ -1,17 +1,17 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// Determine the API base URL - use the current origin if in production
+// Use the current window location to determine the API URL
 const API_BASE_URL = (() => {
-  // Check if we're in production (assume we are if not using localhost)
-  const isProduction = !window.location.hostname.includes('localhost');
+  // Get the current hostname
+  const hostname = window.location.hostname;
   
-  if (isProduction) {
-    // In production, use the same origin as the current page
-    return `${window.location.origin}/api`;
+  // If we're on localhost, use the local development server
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8000/api';
   }
   
-  // In development, use the env variable or fallback
-  return import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  // Otherwise, use the same domain as the current page
+  return `${window.location.origin}/api`;
 })();
 
 console.log('Using API base URL:', API_BASE_URL);
@@ -19,12 +19,29 @@ console.log('Using API base URL:', API_BASE_URL);
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        console.log('Fetching questions from:', `${API_BASE_URL}/survey/questions`);
-        const response = await fetch(`${API_BASE_URL}/survey/questions`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // First, test the API connectivity
+        console.log('Testing API connectivity...');
+        const testResponse = await fetch(`${API_BASE_URL}/survey/test`);
+        if (!testResponse.ok) {
+            console.error('API test failed:', await testResponse.text());
+        } else {
+            console.log('API test successful:', await testResponse.json());
         }
+        
+        // Now fetch the actual questions
+        const url = `${API_BASE_URL}/survey/questions`;
+        console.log('Fetching questions from:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Error response (${response.status}): ${errorText}`);
+            throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorText}`);
+        }
+        
         const data = await response.json();
+        console.log('Questions received:', data);
         return data;
     } catch (error) {
         console.error('Error fetching questions:', error);
@@ -35,7 +52,10 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        const response = await fetch(`${API_BASE_URL}/survey/submit`, {
+        const url = `${API_BASE_URL}/survey/submit`;
+        console.log('Submitting survey to:', url);
+        
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -44,11 +64,14 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         });
         
         if (!response.ok) {
+            console.error(`Error response: ${response.status} ${response.statusText}`);
+            const text = await response.text();
+            console.error('Response body:', text);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const result = await response.json();
-        console.log('Analysis result:', result);
+        console.log('Analysis result received');
         return result;
     } catch (error) {
         console.error('Error submitting survey:', error);
@@ -56,7 +79,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
     }
 }
 
-// Get character icon with proper error handling
+// Get character icon
 export async function getCharacterIcon(iconId: string): Promise<string> {
     try {
         // Ensure iconId is properly formatted
@@ -68,37 +91,37 @@ export async function getCharacterIcon(iconId: string): Promise<string> {
         
         if (!response.ok) {
             console.error(`Failed to load icon ${cleanIconId}, status: ${response.status}`);
-            return '/default-icon.png';
+            return '/static/icon/default.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading character icon:', error);
-        return '/default-icon.png';
+        return '/static/icon/default.png';
     }
 }
 
-// Get school logo
+// Get school logo with updated fallback path
 export async function getSchoolLogo(school: string): Promise<string> {
     try {
         // Format school name properly
         const cleanSchool = school.toLowerCase().replace(/\s+/g, '-');
-        const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`; // Add .png extension
+        const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`;
         
         console.log('Fetching school logo from:', url);
         const response = await fetch(url);
         
         if (!response.ok) {
             console.error(`Failed to load school logo for ${school}, status: ${response.status}`);
-            return '/default-school.png';
+            return '/static/school_icon/default.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading school logo:', error);
-        return '/default-school.png';
+        return '/static/school_icon/default.png';
     }
 }
 
