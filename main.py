@@ -142,23 +142,40 @@ async def root():
 # IMPORTANT: Define explicit routes for SPA paths that need refresh support
 @app.get("/survey/{path_param:path}")
 async def serve_survey_route(path_param: str):
+    """Handle all survey routes by serving the index.html file"""
     logger.info(f"Survey route handler for: /survey/{path_param}")
     index_path = frontend_dir / "index.html"
     if index_path.exists():
+        logger.info(f"Serving index.html for survey route")
         return FileResponse(str(index_path))
     else:
-        logger.error(f"Frontend index.html not found for survey route")
-        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+        error_msg = f"Frontend index.html not found at {index_path}"
+        logger.error(error_msg)
+        return JSONResponse(status_code=404, content={"detail": error_msg})
 
 @app.get("/result")
 async def serve_result_route():
+    """Handle the result route by serving the index.html file"""
     logger.info(f"Result route handler")
     index_path = frontend_dir / "index.html"
     if index_path.exists():
+        logger.info(f"Serving index.html for result route")
         return FileResponse(str(index_path))
     else:
-        logger.error(f"Frontend index.html not found for result route")
-        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+        error_msg = f"Frontend index.html not found at {index_path}"
+        logger.error(error_msg)
+        return JSONResponse(status_code=404, content={"detail": error_msg})
+
+@app.get("/api-test")
+async def api_test():
+    """Test endpoint to verify API is accessible"""
+    return {
+        "status": "ok",
+        "message": "API is working",
+        "static_dir_exists": app_static_dir.exists(),
+        "frontend_dir_exists": frontend_dir.exists(),
+        "index_exists": (frontend_dir / "index.html").exists()
+    }
 
 # Catch-all route for SPA - handle any other frontend routes
 @app.get("/{full_path:path}")
