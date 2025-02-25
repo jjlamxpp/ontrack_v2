@@ -5,20 +5,15 @@ import { CareerAnalysis } from './components/result/CareerAnalysis';
 import { useEffect } from 'react';
 
 function App() {
-  // Get the base URL from environment or default to '/'
-  const baseUrl = import.meta.env.BASE_URL || '/';
-
-  // Log routing information for debugging
+  // Add this to debug routing issues
   useEffect(() => {
-    console.log('App mounted, baseUrl:', baseUrl);
-    console.log('Current location:', window.location.pathname);
-  }, [baseUrl]);
+    console.log('App mounted, pathname:', window.location.pathname);
+  }, []);
 
   return (
-    <Router basename={baseUrl}>
+    <Router>
       <Routes>
         <Route path="/" element={<WelcomePage />} />
-        <Route path="/survey" element={<Navigate to="/survey/1" replace />} />
         <Route path="/survey/:questionId" element={<SurveyPage />} />
         <Route 
           path="/result" 
