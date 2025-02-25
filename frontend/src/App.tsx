@@ -10,6 +10,7 @@ function App() {
         {/* Default route redirects to welcome page */}
         <Route path="/" element={<WelcomePage />} />
         <Route path="/survey/:questionId" element={<SurveyPage />} />
+        <Route path="/survey" element={<Navigate to="/survey/1" replace />} />
         <Route 
           path="/result" 
           element={
