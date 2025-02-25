@@ -12,19 +12,10 @@ export function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Validate and get current page
-  const currentPage = (() => {
-    const page = questionId ? parseInt(questionId) : 1;
-    return isNaN(page) || page < 1 ? 1 : page;
-  })();
+  // Get current page number
+  const currentPage = parseInt(questionId || '1');
 
-  // Add this new effect for route protection
-  useEffect(() => {
-    if (!questionId || isNaN(parseInt(questionId))) {
-      navigate('/survey/1', { replace: true });
-    }
-  }, [questionId, navigate]);
-
+  // Load questions and handle page validation
   useEffect(() => {
     const loadQuestions = async () => {
       try {
@@ -38,61 +29,28 @@ export function SurveyPage() {
         
         setQuestions(data);
         
-        // Initialize or restore answers
-        const savedAnswers = localStorage.getItem('surveyAnswers');
-        let parsedAnswers = new Array(data.length).fill('');
+        // Initialize empty answers array
+        setAnswers(new Array(data.length).fill(''));
         
-        if (savedAnswers) {
-          try {
-            const parsed = JSON.parse(savedAnswers);
-            if (Array.isArray(parsed) && parsed.length === data.length) {
-              parsedAnswers = parsed;
-            }
-          } catch (e) {
-            console.error('Error parsing saved answers');
-            localStorage.removeItem('surveyAnswers');
-          }
-        }
-        
-        setAnswers(parsedAnswers);
-        
-        // Validate current page
+        // Validate current page against total questions
         const maxPages = Math.ceil(data.length / 10);
         if (currentPage > maxPages) {
           navigate('/survey/1', { replace: true });
         }
         
       } catch (err) {
+        console.error('Error loading questions:', err);
         setError(err instanceof Error ? err.message : 'Failed to load questions');
-        navigate('/survey/1', { replace: true });
       } finally {
         setLoading(false);
       }
     };
 
     loadQuestions();
-  }, []);
+  }, [currentPage]); // Add currentPage as dependency
 
-  // Add this function to handle refresh
-  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-    e.preventDefault();
-    // Optionally clear answers on refresh
-    // localStorage.removeItem('surveyAnswers');
-    return e.returnValue = '';
-  };
-
-  useEffect(() => {
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (answers.length > 0) {
-      localStorage.setItem('surveyAnswers', JSON.stringify(answers));
-    }
-  }, [answers]);
+  // Remove the beforeunload event handler since we want to allow refreshes
+  // and just clear the answers
 
   const handleAnswer = (index: number, answer: string) => {
     const newAnswers = [...answers];
@@ -107,7 +65,10 @@ export function SurveyPage() {
   };
 
   const handleNextPage = () => {
-    navigate(`/survey/${currentPage + 1}`);
+    const maxPages = Math.ceil(questions.length / 10);
+    if (currentPage < maxPages) {
+      navigate(`/survey/${currentPage + 1}`);
+    }
   };
 
   const handleSubmit = async () => {
