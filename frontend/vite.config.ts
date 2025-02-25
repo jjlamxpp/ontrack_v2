@@ -10,7 +10,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'build', // Changed from 'dist' to 'build'
+    outDir: 'dist',
+    assetsDir: 'assets',
     sourcemap: true,
     rollupOptions: {
       output: {
@@ -23,5 +24,6 @@ export default defineConfig({
   },
   server: {
     host: true,
+    port: 5173,
   },
 })
