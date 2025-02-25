@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams, Navigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
@@ -12,17 +12,24 @@ export function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Get current page number
-  const currentPage = parseInt(questionId || '1');
+  // Get current page number with validation
+  const currentPage = (() => {
+    const page = parseInt(questionId || '1');
+    return isNaN(page) || page < 1 ? 1 : page;
+  })();
 
-  // Load questions and handle page validation
+  // Load questions on component mount and when page changes
   useEffect(() => {
+    let mounted = true;
+
     const loadQuestions = async () => {
       try {
         setLoading(true);
         setError(null);
         const data = await fetchQuestions();
         
+        if (!mounted) return;
+
         if (!Array.isArray(data)) {
           throw new Error('Invalid response format');
         }
@@ -37,24 +44,33 @@ export function SurveyPage() {
         if (currentPage > maxPages) {
           navigate('/survey/1', { replace: true });
         }
-        
       } catch (err) {
+        if (!mounted) return;
         console.error('Error loading questions:', err);
         setError(err instanceof Error ? err.message : 'Failed to load questions');
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadQuestions();
-  }, [currentPage]); // Add currentPage as dependency
 
-  // Remove the beforeunload event handler since we want to allow refreshes
-  // and just clear the answers
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
+  }, []); // Only run on mount
+
+  const questionsPerPage = 10;
+  const startIndex = (currentPage - 1) * questionsPerPage;
+  const currentQuestions = questions.slice(startIndex, startIndex + questionsPerPage);
+  const maxPages = Math.ceil(questions.length / questionsPerPage);
 
   const handleAnswer = (index: number, answer: string) => {
     const newAnswers = [...answers];
-    newAnswers[index] = answer;
+    newAnswers[startIndex + index] = answer;
     setAnswers(newAnswers);
   };
 
@@ -65,7 +81,6 @@ export function SurveyPage() {
   };
 
   const handleNextPage = () => {
-    const maxPages = Math.ceil(questions.length / 10);
     if (currentPage < maxPages) {
       navigate(`/survey/${currentPage + 1}`);
     }
@@ -80,7 +95,6 @@ export function SurveyPage() {
 
       const result = await submitSurveyAndGetAnalysis(answers);
       localStorage.setItem('analysisResult', JSON.stringify(result));
-      localStorage.removeItem('surveyAnswers');
       navigate('/result');
     } catch (err) {
       console.error('Submission error:', err);
@@ -102,21 +116,15 @@ export function SurveyPage() {
         <div className="text-center">
           <div className="text-xl text-red-500 mb-4">Error: {error}</div>
           <button 
-            onClick={() => setError(null)} 
+            onClick={() => window.location.reload()} 
             className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
           >
-            Dismiss
+            Retry
           </button>
         </div>
       </div>
     );
   }
-
-  const questionsPerPage = 10;
-  const startIndex = (currentPage - 1) * questionsPerPage;
-  const currentQuestions = questions.slice(startIndex, startIndex + questionsPerPage);
-  const isLastPage = currentPage === Math.ceil(questions.length / questionsPerPage);
-  const isFirstPage = currentPage === 1;
 
   return (
     <div className="min-h-screen w-full bg-[#1B2541] text-white">
@@ -125,7 +133,7 @@ export function SurveyPage() {
           <h1 className="text-3xl font-bold mb-6">
             <span className="text-[#3B82F6]">On</span>Track
           </h1>
-          <Progress value={(currentPage / 4) * 100} className="mb-4" />
+          <Progress value={(currentPage / maxPages) * 100} className="mb-4" />
           <p className="text-sm text-gray-400">
             Questions {startIndex + 1}-{Math.min(startIndex + currentQuestions.length, questions.length)} of {questions.length}
           </p>
@@ -145,7 +153,7 @@ export function SurveyPage() {
                       ? 'bg-[#3B82F6] hover:bg-[#2563EB]'
                       : 'bg-white/20 hover:bg-[#3B82F6]/70'
                   }`}
-                  onClick={() => handleAnswer(startIndex + index, 'YES')}
+                  onClick={() => handleAnswer(index, 'YES')}
                 >
                   YES
                 </button>
@@ -155,7 +163,7 @@ export function SurveyPage() {
                       ? 'bg-[#F87171] hover:bg-[#EF4444]'
                       : 'bg-white/20 hover:bg-[#F87171]/70'
                   }`}
-                  onClick={() => handleAnswer(startIndex + index, 'NO')}
+                  onClick={() => handleAnswer(index, 'NO')}
                 >
                   NO
                 </button>
@@ -165,7 +173,7 @@ export function SurveyPage() {
         </div>
 
         <div className="flex justify-center gap-4 mt-auto pb-8">
-          {!isFirstPage && (
+          {currentPage > 1 && (
             <button
               className="px-8 py-3 rounded-full bg-gray-500 hover:bg-gray-600 transition-colors"
               onClick={handlePreviousPage}
@@ -174,7 +182,7 @@ export function SurveyPage() {
             </button>
           )}
           
-          {!isLastPage ? (
+          {currentPage < maxPages ? (
             <button
               className={`px-8 py-3 rounded-full transition-colors ${
                 currentQuestions.every((_, index) => answers[startIndex + index] !== '')
