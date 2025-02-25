@@ -14,14 +14,14 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@radix-ui/react-progress', '@radix-ui/react-slot']
-        }
-      }
+        manualChunks: undefined,
+      },
     }
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom']
-  }
+  },
+  server: {
+    host: true,
+  },
 })
