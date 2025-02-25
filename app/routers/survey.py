@@ -13,6 +13,9 @@ router = APIRouter()
 database_path = "app/database/Database.xlsx"
 db = SurveyDatabase(database_path)
 
+# Get BASE_DIR from environment variable
+BASE_DIR = Path(os.environ.get("BASE_DIR", ".")).resolve()
+
 # Initialize icon directories
 def init_icon_directories():
     # Updated paths without double 'app'
@@ -149,7 +152,7 @@ async def submit_survey(response: SurveyResponse):
             detail=f"Error processing survey: {str(e)}"
         )
 
-@router.get("/survey/icon/{filename}")
+@router.get("/icon/{filename}")
 async def get_icon(filename: str):
     try:
         # Ensure filename ends with .png
@@ -160,8 +163,8 @@ async def get_icon(filename: str):
         clean_filename = filename.replace(' ', '').replace('HTTP', '').strip()
         
         # Construct the full path
-        icon_path = BASE_DIR / "static" / "icons" / clean_filename
-        default_icon = BASE_DIR / "static" / "icons" / "default-icon.png"
+        icon_path = BASE_DIR / "app" / "static" / "icon" / clean_filename
+        default_icon = BASE_DIR / "app" / "static" / "icon" / "default.png"
         
         print(f"Looking for icon at: {icon_path}")
         
@@ -177,7 +180,7 @@ async def get_icon(filename: str):
                 return FileResponse(
                     path=str(default_icon),
                     media_type="image/png",
-                    filename="default-icon.png"
+                    filename="default.png"
                 )
             raise HTTPException(status_code=404, detail="Icon not found")
             
@@ -185,7 +188,7 @@ async def get_icon(filename: str):
         print(f"Error serving icon: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/survey/school-icon/{filename}")
+@router.get("/school-icon/{filename}")
 async def get_school_logo(filename: str):
     try:
         # Ensure filename ends with .png
@@ -196,8 +199,8 @@ async def get_school_logo(filename: str):
         clean_filename = filename.lower().replace(' ', '-').replace('http', '').strip()
         
         # Construct the full path
-        logo_path = BASE_DIR / "static" / "school_logos" / clean_filename
-        default_logo = BASE_DIR / "static" / "school_logos" / "default-school.png"
+        logo_path = BASE_DIR / "app" / "static" / "school_icon" / clean_filename
+        default_logo = BASE_DIR / "app" / "static" / "school_icon" / "default.png"
         
         print(f"Looking for school logo at: {logo_path}")
         
@@ -213,7 +216,7 @@ async def get_school_logo(filename: str):
                 return FileResponse(
                     path=str(default_logo),
                     media_type="image/png",
-                    filename="default-school.png"
+                    filename="default.png"
                 )
             raise HTTPException(status_code=404, detail="School logo not found")
             
