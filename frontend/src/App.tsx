@@ -4,8 +4,11 @@ import { SurveyPage } from './components/SurveyPage';
 import { CareerAnalysis } from './components/result/CareerAnalysis';
 
 function App() {
+  // Get the base URL from environment or default to '/'
+  const baseUrl = import.meta.env.BASE_URL || '/';
+
   return (
-    <Router>
+    <Router basename={baseUrl}>
       <Routes>
         <Route path="/" element={<WelcomePage />} />
         <Route path="/survey" element={<Navigate to="/survey/1" replace />} />
@@ -18,8 +21,8 @@ function App() {
             </RequireAnalysis>
           } 
         />
-        {/* Important: Add this catch-all route */}
-        <Route path="*" element={<Navigate to="/" />} />
+        {/* Catch-all route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
