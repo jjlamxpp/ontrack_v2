@@ -30,7 +30,7 @@ app_school_icon_dir = app_static_dir / "school_icon"
 app.mount("/static", StaticFiles(directory=str(app_static_dir)), name="static")
 
 # Mount the frontend dist directory
-frontend_dir = BASE_DIR / "frontend" / "dist"
+frontend_dir = BASE_DIR / "frontend" / "src"
 app.mount("/assets", StaticFiles(directory=str(frontend_dir / "assets")), name="assets")
 
 # Configure CORS for both development and production
