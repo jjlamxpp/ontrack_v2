@@ -11,10 +11,21 @@ npm install
 echo "Building frontend..."
 npm run build
 
-echo "Creating frontend directory at project root..."
+echo "Creating necessary directories..."
 cd ..
-mkdir -p frontend
-echo "Copying frontend build to frontend directory..."
-cp -r frontend/dist/* frontend/
+mkdir -p frontend/dist
+mkdir -p app/static/icon
+mkdir -p app/static/school_icon
+
+# Copy default icons if needed
+if [ -d "backup/icons" ]; then
+  echo "Copying backup icons to static directory..."
+  cp -r backup/icons/* app/static/icon/
+fi
+
+if [ -d "backup/school_icons" ]; then
+  echo "Copying backup school icons to static directory..."
+  cp -r backup/school_icons/* app/static/school_icon/
+fi
 
 echo "Build completed successfully!"
