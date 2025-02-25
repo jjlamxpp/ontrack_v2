@@ -1,9 +1,12 @@
 services:
   - type: web
     name: ontrack-v2
-    env: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/dist
+    env: python
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: python main.py
+    envVars:
+      - key: PORT
+        value: 8000
     routes:
       - type: rewrite
         source: /*
