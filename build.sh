@@ -13,7 +13,10 @@ npm run build
 
 echo "Creating necessary directories..."
 cd ..
-mkdir -p frontend/dist
+mkdir -p app/static
+cp -r frontend/dist/* app/static/
+
+echo "Ensuring icon directories exist..."
 mkdir -p app/static/icon
 mkdir -p app/static/school_icon
 
