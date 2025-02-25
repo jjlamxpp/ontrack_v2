@@ -1,15 +1,20 @@
 #!/bin/bash
-echo "Starting build process..."
+set -e
 
-# Create static directories if they don't exist
-mkdir -p app/static/icon
-mkdir -p app/static/school_icon
+echo "Installing Python dependencies..."
+pip install -r requirements.txt
 
-# Copy default images if they exist in source
-if [ -f "app/static/source/default.png" ]; then
-    cp app/static/source/default.png app/static/icon/
-    cp app/static/source/default.png app/static/school_icon/
-fi
+echo "Installing frontend dependencies..."
+cd frontend
+npm install
 
-echo "Static directories created"
-echo "Build completed successfully"
+echo "Building frontend..."
+npm run build
+
+echo "Creating frontend directory at project root..."
+cd ..
+mkdir -p frontend
+echo "Copying frontend build to frontend directory..."
+cp -r frontend/dist/* frontend/
+
+echo "Build completed successfully!"
