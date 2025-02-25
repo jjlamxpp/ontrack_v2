@@ -7,3 +7,9 @@ services:
     envVars:
       - key: PORT
         value: 8000
+      - key: BASE_DIR
+        value: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /
