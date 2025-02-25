@@ -1,11 +1,13 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 import logging
 import sys
 import os
+import traceback
+import re
 
 # Set up logging with more verbose output
 logging.basicConfig(
@@ -17,14 +19,27 @@ logger = logging.getLogger(__name__)
 # Export BASE_DIR as a global variable for other modules to use
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = BASE_DIR / "app"
-frontend_dir = BASE_DIR / "frontend"  # Updated: Direct frontend directory
+frontend_dir = BASE_DIR / "frontend"
 
 # Log important directories
 logger.info(f"BASE_DIR: {BASE_DIR}")
 logger.info(f"APP_DIR: {APP_DIR}")
 logger.info(f"frontend_dir: {frontend_dir}")
+logger.info(f"Frontend directory exists: {frontend_dir.exists()}")
+if frontend_dir.exists():
+    logger.info(f"Frontend directory contents: {list(frontend_dir.iterdir())}")
 
 app = FastAPI()
+
+# Add exception handlers for better error reporting
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "type": type(exc).__name__}
+    )
 
 # Configure CORS
 app.add_middleware(
@@ -51,16 +66,15 @@ if app_static_dir.exists():
 else:
     logger.warning(f"Static directory not found: {app_static_dir}")
 
-# Check for frontend assets directory
+# Check for frontend assets directory and mount it if it exists
 assets_dir = frontend_dir / "assets"
 if assets_dir.exists():
     logger.info(f"Mounting /assets to {assets_dir}")
     app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 else:
     logger.warning(f"Assets directory not found: {assets_dir}")
-    # Log available files in frontend dir for debugging
     if frontend_dir.exists():
-        logger.info(f"Frontend directory exists. Available files: {list(frontend_dir.glob('*'))}")
+        logger.info(f"Frontend directory contents: {list(frontend_dir.glob('*'))}")
 
 # Add API routes
 try:
@@ -79,15 +93,37 @@ try:
     logger.info("Successfully loaded survey router")
 except Exception as e:
     logger.error(f"Failed to load survey router: {str(e)}")
+    logger.error(traceback.format_exc())
     raise
+
+# Add a health check endpoint for debugging
+@app.get("/debug/health")
+async def health_check():
+    return {
+        "status": "ok", 
+        "frontend_dir_exists": frontend_dir.exists(),
+        "frontend_index_exists": (frontend_dir / "index.html").exists(),
+        "static_dir_exists": app_static_dir.exists(),
+        "python_version": sys.version,
+        "working_directory": os.getcwd(),
+        "app_directory": str(APP_DIR),
+        "base_directory": str(BASE_DIR)
+    }
 
 # Middleware to log all requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger.info(f"Request path: {request.url.path}")
-    response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
-    return response
+    path = request.url.path
+    logger.info(f"Request path: {path}")
+    
+    try:
+        response = await call_next(request)
+        logger.info(f"Response status: {response.status_code} for {path}")
+        return response
+    except Exception as e:
+        logger.error(f"Error during request processing: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 # Root route - serve index.html
 @app.get("/")
@@ -98,39 +134,54 @@ async def root():
         return FileResponse(str(index_path))
     else:
         logger.error(f"Frontend index.html not found at {index_path}")
-        return {"message": "Frontend index.html not found"}
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Frontend index.html not found at {index_path}"}
+        )
 
-# Serve static files directly from frontend directory
-@app.get("/src/{file_path:path}")
-async def serve_frontend_src(file_path: str):
-    file_full_path = frontend_dir / "src" / file_path
-    if file_full_path.exists() and file_full_path.is_file():
-        return FileResponse(str(file_full_path))
-    raise HTTPException(status_code=404, detail="File not found")
+# IMPORTANT: Define explicit routes for SPA paths that need refresh support
+@app.get("/survey/{path_param:path}")
+async def serve_survey_route(path_param: str):
+    logger.info(f"Survey route handler for: /survey/{path_param}")
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    else:
+        logger.error(f"Frontend index.html not found for survey route")
+        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
 
-# Universal catch-all route for SPA
+@app.get("/result")
+async def serve_result_route():
+    logger.info(f"Result route handler")
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    else:
+        logger.error(f"Frontend index.html not found for result route")
+        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+
+# Catch-all route for SPA - handle any other frontend routes
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # Skip API routes and certain static file patterns
-    if full_path.startswith(("api/", "assets/", "static/")):
-        logger.info(f"Skipping SPA handler for API/asset path: {full_path}")
+    # Skip API and static routes
+    if full_path.startswith(("api/", "static/", "assets/", "debug/")):
+        logger.info(f"Skipping SPA handler for non-frontend path: {full_path}")
         raise HTTPException(status_code=404, detail="Not found")
     
-    # First check if this is a direct file in the frontend directory
+    # Check if it's a direct file
     direct_path = frontend_dir / full_path
     if direct_path.exists() and direct_path.is_file():
         logger.info(f"Serving direct file: {direct_path}")
         return FileResponse(str(direct_path))
     
-    # For all other routes, serve index.html to enable client-side routing
-    logger.info(f"Serving SPA for route: {full_path}")
+    # For all other routes, serve index.html
     index_path = frontend_dir / "index.html"
     if index_path.exists():
-        logger.info(f"Serving index.html from {index_path}")
+        logger.info(f"Serving SPA via index.html for: {full_path}")
         return FileResponse(str(index_path))
     else:
-        logger.error(f"Frontend index.html not found at {index_path}")
-        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+        logger.error(f"Frontend index.html not found for path: {full_path}")
+        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
 
 if __name__ == "__main__":
     import uvicorn
@@ -138,6 +189,7 @@ if __name__ == "__main__":
     # Get port from environment variable or use default
     port = int(os.getenv("PORT", 8000))
     
+    logger.info(f"Starting server on port {port}")
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
