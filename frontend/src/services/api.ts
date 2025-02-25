@@ -1,30 +1,21 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
 // Use the current window location to determine the API URL
-const API_BASE_URL = (() => {
-  // Always use the same origin for API requests
-  return `${window.location.origin}/api`;
-})();
+const API_BASE_URL = `${window.location.origin}/api`;
 
 console.log('Using API base URL:', API_BASE_URL);
 
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        // First, test the API connectivity
-        console.log('Testing API connectivity...');
-        const testResponse = await fetch(`${API_BASE_URL}/survey/test`);
-        if (!testResponse.ok) {
-            console.error('API test failed:', await testResponse.text());
-        } else {
-            console.log('API test successful:', await testResponse.json());
-        }
-        
-        // Now fetch the actual questions
         const url = `${API_BASE_URL}/survey/questions`;
         console.log('Fetching questions from:', url);
         
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'Accept': 'application/json',
+            },
+        });
         
         if (!response.ok) {
             const errorText = await response.text();
