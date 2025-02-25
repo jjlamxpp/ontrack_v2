@@ -36,8 +36,14 @@ export function SurveyPage() {
         
         setQuestions(data);
         
-        // Initialize empty answers array
-        setAnswers(new Array(data.length).fill(''));
+        // Check for saved answers in localStorage
+        const savedAnswers = localStorage.getItem('surveyAnswers');
+        if (savedAnswers) {
+          setAnswers(JSON.parse(savedAnswers));
+        } else {
+          // Initialize empty answers array
+          setAnswers(new Array(data.length).fill(''));
+        }
         
         // Validate current page against total questions
         const maxPages = Math.ceil(data.length / 10);
@@ -62,6 +68,13 @@ export function SurveyPage() {
       mounted = false;
     };
   }, []); // Only run on mount
+
+  // Save answers to localStorage whenever they change
+  useEffect(() => {
+    if (answers.length > 0) {
+      localStorage.setItem('surveyAnswers', JSON.stringify(answers));
+    }
+  }, [answers]);
 
   const questionsPerPage = 10;
   const startIndex = (currentPage - 1) * questionsPerPage;
@@ -95,6 +108,8 @@ export function SurveyPage() {
 
       const result = await submitSurveyAndGetAnalysis(answers);
       localStorage.setItem('analysisResult', JSON.stringify(result));
+      // Clear survey answers after successful submission
+      localStorage.removeItem('surveyAnswers');
       navigate('/result');
     } catch (err) {
       console.error('Submission error:', err);
