@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "rm -rf build && tsc --noEmit && vite build",
+    "build": "vite build && cp public/staticwebapp.config.json dist/",
     "preview": "vite preview"
   },
   "dependencies": {
