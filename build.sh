@@ -16,6 +16,12 @@ cd ..
 mkdir -p app/static
 cp -r frontend/dist/* app/static/
 
+echo "Ensuring database directory exists..."
+mkdir -p app/database
+if [ -f "Database.xlsx" ]; then
+    cp Database.xlsx app/database/
+fi
+
 echo "Ensuring icon directories exist..."
 mkdir -p app/static/icon
 mkdir -p app/static/school_icon
