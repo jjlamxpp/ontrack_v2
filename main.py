@@ -29,6 +29,10 @@ app_school_icon_dir = app_static_dir / "school_icon"
 # Mount static files directory directly from app folder
 app.mount("/static", StaticFiles(directory=str(app_static_dir)), name="static")
 
+# Mount the frontend dist directory
+frontend_dir = BASE_DIR / "frontend" / "dist"
+app.mount("/assets", StaticFiles(directory=str(frontend_dir / "assets")), name="assets")
+
 # Configure CORS for both development and production
 app.add_middleware(
     CORSMiddleware,
@@ -44,16 +48,20 @@ app.add_middleware(
 # Add root route
 @app.get("/")
 async def root():
-    return {
-        "message": "Welcome to OnTrack API",
-        "version": "2.0",
-        "endpoints": {
-            "survey": "/api/survey/questions",
-            "submit": "/api/survey/submit",
-            "icons": "/api/survey/icon/{icon_id}",
-            "school_icons": "/api/survey/school-icon/{school}"
+    # For API root requests
+    if "accept" in app.state.request_headers and "application/json" in app.state.request_headers["accept"]:
+        return {
+            "message": "Welcome to OnTrack API",
+            "version": "2.0",
+            "endpoints": {
+                "survey": "/api/survey/questions",
+                "submit": "/api/survey/submit",
+                "icons": "/api/survey/icon/{icon_id}",
+                "school_icons": "/api/survey/school-icon/{school}"
+            }
         }
-    }
+    # For frontend requests, serve the index.html
+    return FileResponse(str(frontend_dir / "index.html"))
 
 # Health check endpoint
 @app.get("/health")
@@ -168,6 +176,17 @@ async def get_school_icon(school: str):
     except Exception as e:
         logger.error(f"Error serving school icon {school}: {str(e)}")
         raise HTTPException(status_code=404, detail="School icon not found")
+
+# Catch-all route for the SPA - must be defined AFTER API routes
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    # Skip for API routes and static asset routes
+    if full_path.startswith("api/") or full_path.startswith("static/") or full_path.startswith("assets/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    # Return the index.html file for all other routes
+    logger.info(f"Serving frontend for path: {full_path}")
+    return FileResponse(str(frontend_dir / "index.html"))
 
 # Include routers
 try:
