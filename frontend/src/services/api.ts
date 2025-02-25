@@ -1,10 +1,25 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// Determine the API base URL - use the current origin if in production
+const API_BASE_URL = (() => {
+  // Check if we're in production (assume we are if not using localhost)
+  const isProduction = !window.location.hostname.includes('localhost');
+  
+  if (isProduction) {
+    // In production, use the same origin as the current page
+    return `${window.location.origin}/api`;
+  }
+  
+  // In development, use the env variable or fallback
+  return import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+})();
+
+console.log('Using API base URL:', API_BASE_URL);
 
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
+        console.log('Fetching questions from:', `${API_BASE_URL}/survey/questions`);
         const response = await fetch(`${API_BASE_URL}/survey/questions`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
