@@ -177,12 +177,23 @@ async def api_test():
         "index_exists": (frontend_dir / "index.html").exists()
     }
 
+# Move this route before the catch-all route
+@app.get("/api/survey/questions")
+async def get_questions():
+    try:
+        questions = db.get_all_questions()
+        return questions
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching questions: {str(e)}"
+        )
+
 # Catch-all route for SPA - handle any other frontend routes
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # Skip API and static routes
-    if full_path.startswith(("api/", "static/", "assets/", "debug/")):
-        logger.info(f"Skipping SPA handler for non-frontend path: {full_path}")
+    # Skip API routes
+    if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
     
     # For all other routes, serve index.html
