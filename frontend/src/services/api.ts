@@ -13,7 +13,6 @@ export async function fetchQuestions(): Promise<Question[]> {
         
         // Add more detailed debugging
         console.log('Current location:', window.location.href);
-        console.log('API base URL:', API_BASE_URL);
         
         const response = await fetch(url, {
             headers: {
@@ -21,21 +20,15 @@ export async function fetchQuestions(): Promise<Question[]> {
             },
             // Add cache control to prevent caching issues
             cache: 'no-cache',
+            // Add credentials to include cookies if needed
+            credentials: 'include',
         });
         
         console.log('Response status:', response.status);
-        console.log('Response headers:', Object.fromEntries([...response.headers.entries()]));
         
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Error response (${response.status}): ${errorText}`);
-            
-            // Try a fallback direct API call
-            console.log('Trying fallback API call...');
-            const fallbackUrl = `${window.location.origin}/api-test`;
-            const fallbackResponse = await fetch(fallbackUrl);
-            console.log('Fallback response:', await fallbackResponse.text());
-            
             throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorText}`);
         }
         
@@ -60,6 +53,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ answers }),
+            credentials: 'include',
         });
         
         if (!response.ok) {
