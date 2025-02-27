@@ -101,51 +101,79 @@ except Exception as e:
 async def api_debug():
     return {"status": "API is working", "routes": [{"path": route.path, "name": route.name} for route in app.routes]}
 
-# Fix the catch-all route to properly handle SPA routing
+# Improve the catch-all route with better logging and fallbacks
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # Skip API routes - they should be handled by their own handlers
+    # Skip API routes
     if full_path.startswith("api/"):
         logger.info(f"API route not handled by catch-all: {full_path}")
         raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
     
-    # For all other routes, serve index.html from the correct location
-    index_path = frontend_dir / "index.html"
+    logger.info(f"Serving frontend for path: {full_path}")
     
-    logger.info(f"Looking for index.html at: {index_path}")
-    logger.info(f"Index exists: {index_path.exists()}")
+    # Try multiple possible locations for index.html
+    possible_paths = [
+        frontend_dir / "index.html",
+        frontend_dir / "dist" / "index.html",
+        BASE_DIR / "frontend" / "index.html",
+        BASE_DIR / "frontend" / "dist" / "index.html"
+    ]
     
-    if index_path.exists():
-        logger.info(f"Serving SPA via index.html for path: {full_path}")
-        return FileResponse(str(index_path))
-    else:
-        # Try alternative locations
-        alt_index_path = BASE_DIR / "frontend" / "src" / "index.html"
-        if alt_index_path.exists():
-            logger.info(f"Serving SPA via alternative index.html for path: {full_path}")
-            return FileResponse(str(alt_index_path))
-            
-        logger.error(f"Frontend index.html not found at {index_path} or alternatives")
-        return JSONResponse(
-            status_code=404, 
-            content={
-                "detail": "Frontend not found", 
-                "checked_paths": [str(index_path), str(alt_index_path)]
-            }
-        )
+    # Log all possible paths
+    for idx, path in enumerate(possible_paths):
+        logger.info(f"Checking path {idx+1}: {path} (exists: {path.exists()})")
+    
+    # Try each path in order
+    for path in possible_paths:
+        if path.exists():
+            logger.info(f"Found index.html at {path}, serving for {full_path}")
+            return FileResponse(str(path))
+    
+    # If we get here, we couldn't find index.html
+    logger.error(f"Could not find index.html in any expected location")
+    
+    # Return a more helpful error
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Frontend index.html not found",
+            "checked_paths": [str(p) for p in possible_paths],
+            "current_path": full_path,
+            "frontend_dir": str(frontend_dir),
+            "base_dir": str(BASE_DIR)
+        }
+    )
 
-# Add a health check endpoint for debugging
+# Add a more comprehensive health check
 @app.get("/debug/health")
 async def health_check():
+    # Check for index.html in various locations
+    index_locations = [
+        frontend_dir / "index.html",
+        frontend_dir / "dist" / "index.html",
+        BASE_DIR / "frontend" / "index.html",
+        BASE_DIR / "frontend" / "dist" / "index.html"
+    ]
+    
+    index_exists = {str(path): path.exists() for path in index_locations}
+    
+    # Check directory contents
+    directory_contents = {
+        "frontend_dir": list(map(str, frontend_dir.glob("*"))) if frontend_dir.exists() else "directory not found",
+        "frontend_dist": list(map(str, (frontend_dir / "dist").glob("*"))) if (frontend_dir / "dist").exists() else "directory not found",
+        "base_dir": list(map(str, BASE_DIR.glob("*"))) if BASE_DIR.exists() else "directory not found"
+    }
+    
     return {
         "status": "ok", 
         "frontend_dir_exists": frontend_dir.exists(),
-        "frontend_index_exists": (frontend_dir / "index.html").exists(),
-        "static_dir_exists": app_static_dir.exists(),
+        "index_html_locations": index_exists,
+        "directory_contents": directory_contents,
         "python_version": sys.version,
         "working_directory": os.getcwd(),
         "app_directory": str(APP_DIR),
-        "base_directory": str(BASE_DIR)
+        "base_directory": str(BASE_DIR),
+        "environment_variables": {k: v for k, v in os.environ.items() if k in ["BASE_DIR", "PORT", "PATH"]}
     }
 
 # Middleware to log all requests
