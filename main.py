@@ -76,7 +76,7 @@ else:
     if frontend_dir.exists():
         logger.info(f"Frontend directory contents: {list(frontend_dir.glob('*'))}")
 
-# Add API routes
+# Add API routes - IMPORTANT: This must come BEFORE the catch-all route
 try:
     # Add the project root to Python path
     sys.path.append(str(BASE_DIR))
@@ -91,6 +91,11 @@ try:
         tags=["survey"]
     )
     logger.info("Successfully loaded survey router")
+    
+    # Log all registered routes for debugging
+    for route in app.routes:
+        logger.info(f"Registered route: {route.path} ({route.name})")
+        
 except Exception as e:
     logger.error(f"Failed to load survey router: {str(e)}")
     logger.error(traceback.format_exc())
@@ -101,7 +106,63 @@ except Exception as e:
 async def api_debug():
     return {"status": "API is working", "routes": [{"path": route.path, "name": route.name} for route in app.routes]}
 
-# Improve the catch-all route with better logging and fallbacks
+# Middleware to log all requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    path = request.url.path
+    logger.info(f"Request path: {path}")
+    
+    try:
+        response = await call_next(request)
+        logger.info(f"Response status: {response.status_code} for {path}")
+        return response
+    except Exception as e:
+        logger.error(f"Error during request processing: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
+
+# Root route - serve index.html
+@app.get("/")
+async def root():
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        logger.info(f"Serving root index.html from {index_path}")
+        return FileResponse(str(index_path))
+    else:
+        logger.error(f"Frontend index.html not found at {index_path}")
+        return JSONResponse(
+            status_code=404,
+            content={"detail": f"Frontend index.html not found at {index_path}"}
+        )
+
+# IMPORTANT: Define explicit routes for SPA paths that need refresh support
+@app.get("/survey/{path_param:path}")
+async def serve_survey_route(path_param: str):
+    """Handle all survey routes by serving the index.html file"""
+    logger.info(f"Survey route handler for: /survey/{path_param}")
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        logger.info(f"Serving index.html for survey route")
+        return FileResponse(str(index_path))
+    else:
+        error_msg = f"Frontend index.html not found at {index_path}"
+        logger.error(error_msg)
+        return JSONResponse(status_code=404, content={"detail": error_msg})
+
+@app.get("/result")
+async def serve_result_route():
+    """Handle the result route by serving the index.html file"""
+    logger.info(f"Result route handler")
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        logger.info(f"Serving index.html for result route")
+        return FileResponse(str(index_path))
+    else:
+        error_msg = f"Frontend index.html not found at {index_path}"
+        logger.error(error_msg)
+        return JSONResponse(status_code=404, content={"detail": error_msg})
+
+# Catch-all route should be LAST
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
     # Skip API routes
@@ -114,7 +175,7 @@ async def serve_frontend(full_path: str):
     # Try multiple possible locations for index.html
     possible_paths = [
         frontend_dir / "index.html",
-        frontend_dir / "dist" / "index.html",
+        BASE_DIR / "frontend" / "src" / "index.html",
         BASE_DIR / "frontend" / "index.html",
         BASE_DIR / "frontend" / "dist" / "index.html"
     ]
@@ -174,73 +235,6 @@ async def health_check():
         "app_directory": str(APP_DIR),
         "base_directory": str(BASE_DIR),
         "environment_variables": {k: v for k, v in os.environ.items() if k in ["BASE_DIR", "PORT", "PATH"]}
-    }
-
-# Middleware to log all requests
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    path = request.url.path
-    logger.info(f"Request path: {path}")
-    
-    try:
-        response = await call_next(request)
-        logger.info(f"Response status: {response.status_code} for {path}")
-        return response
-    except Exception as e:
-        logger.error(f"Error during request processing: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
-
-# Root route - serve index.html
-@app.get("/")
-async def root():
-    index_path = frontend_dir / "index.html"
-    if index_path.exists():
-        logger.info(f"Serving root index.html from {index_path}")
-        return FileResponse(str(index_path))
-    else:
-        logger.error(f"Frontend index.html not found at {index_path}")
-        return JSONResponse(
-            status_code=404,
-            content={"detail": f"Frontend index.html not found at {index_path}"}
-        )
-
-# IMPORTANT: Define explicit routes for SPA paths that need refresh support
-@app.get("/survey/{path_param:path}")
-async def serve_survey_route(path_param: str):
-    """Handle all survey routes by serving the index.html file"""
-    logger.info(f"Survey route handler for: /survey/{path_param}")
-    index_path = frontend_dir / "index.html"
-    if index_path.exists():
-        logger.info(f"Serving index.html for survey route")
-        return FileResponse(str(index_path))
-    else:
-        error_msg = f"Frontend index.html not found at {index_path}"
-        logger.error(error_msg)
-        return JSONResponse(status_code=404, content={"detail": error_msg})
-
-@app.get("/result")
-async def serve_result_route():
-    """Handle the result route by serving the index.html file"""
-    logger.info(f"Result route handler")
-    index_path = frontend_dir / "index.html"
-    if index_path.exists():
-        logger.info(f"Serving index.html for result route")
-        return FileResponse(str(index_path))
-    else:
-        error_msg = f"Frontend index.html not found at {index_path}"
-        logger.error(error_msg)
-        return JSONResponse(status_code=404, content={"detail": error_msg})
-
-@app.get("/api-test")
-async def api_test():
-    """Test endpoint to verify API is accessible"""
-    return {
-        "status": "ok",
-        "message": "API is working",
-        "static_dir_exists": app_static_dir.exists(),
-        "frontend_dir_exists": frontend_dir.exists(),
-        "index_exists": (frontend_dir / "index.html").exists()
     }
 
 if __name__ == "__main__":
