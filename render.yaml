@@ -2,12 +2,12 @@ services:
   - type: web
     name: ontrack
     env: python
-    buildCommand: |
-      pip install -r requirements.txt
-      cd frontend && npm install && npm run build
-      mkdir -p ../frontend/dist
-      cp -r dist/* ../frontend/dist/
+    buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
       - key: PORT
         value: 8000
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /
