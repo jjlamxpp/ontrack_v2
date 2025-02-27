@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Export BASE_DIR as a global variable for other modules to use
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = BASE_DIR / "app"
-frontend_dir = BASE_DIR / "frontend"
+frontend_dir = BASE_DIR / "frontend" / "src"
 
 # Log important directories
 logger.info(f"BASE_DIR: {BASE_DIR}")
@@ -96,22 +96,43 @@ except Exception as e:
     logger.error(traceback.format_exc())
     raise
 
-# Modify the catch-all route to better handle SPA routing
+# Add a debug endpoint to check API routing
+@app.get("/api/debug")
+async def api_debug():
+    return {"status": "API is working", "routes": [{"path": route.path, "name": route.name} for route in app.routes]}
+
+# Fix the catch-all route to properly handle SPA routing
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # Skip API routes
+    # Skip API routes - they should be handled by their own handlers
     if full_path.startswith("api/"):
         logger.info(f"API route not handled by catch-all: {full_path}")
-        raise HTTPException(status_code=404, detail="API route not found")
+        raise HTTPException(status_code=404, detail=f"API route not found: {full_path}")
     
-    # For all other routes, serve index.html
+    # For all other routes, serve index.html from the correct location
     index_path = frontend_dir / "index.html"
+    
+    logger.info(f"Looking for index.html at: {index_path}")
+    logger.info(f"Index exists: {index_path.exists()}")
+    
     if index_path.exists():
-        logger.info(f"Serving SPA via index.html for: {full_path}")
+        logger.info(f"Serving SPA via index.html for path: {full_path}")
         return FileResponse(str(index_path))
     else:
-        logger.error(f"Frontend index.html not found for path: {full_path}")
-        return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+        # Try alternative locations
+        alt_index_path = BASE_DIR / "frontend" / "src" / "index.html"
+        if alt_index_path.exists():
+            logger.info(f"Serving SPA via alternative index.html for path: {full_path}")
+            return FileResponse(str(alt_index_path))
+            
+        logger.error(f"Frontend index.html not found at {index_path} or alternatives")
+        return JSONResponse(
+            status_code=404, 
+            content={
+                "detail": "Frontend not found", 
+                "checked_paths": [str(index_path), str(alt_index_path)]
+            }
+        )
 
 # Add a health check endpoint for debugging
 @app.get("/debug/health")
