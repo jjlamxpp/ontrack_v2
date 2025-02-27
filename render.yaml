@@ -1,14 +1,12 @@
 services:
   - type: web
-    name: ontrack-v2
+    name: ontrack
     env: python
-    buildCommand: chmod +x build.sh && ./build.sh
+    buildCommand: pip install -r requirements.txt && cd frontend && npm install && npm run build
     startCommand: python main.py
     envVars:
       - key: PORT
         value: 8000
-      - key: BASE_DIR
-        value: .
     routes:
       - type: rewrite
         source: /*
