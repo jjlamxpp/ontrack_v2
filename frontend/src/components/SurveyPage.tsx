@@ -76,6 +76,26 @@ export function SurveyPage() {
     }
   }, [answers]);
 
+  // Add this at the top of your file
+  useEffect(() => {
+    // Log the current URL to help with debugging
+    console.log('SurveyPage mounted, current URL:', window.location.href);
+    console.log('API base URL:', 'https://ontrack-v2.onrender.com/api');
+    
+    // Test the API endpoint directly
+    fetch('https://ontrack-v2.onrender.com/api/survey/questions')
+      .then(response => {
+        console.log('Direct API test response:', response.status);
+        return response.text();
+      })
+      .then(text => {
+        console.log('API response text:', text.substring(0, 100) + '...');
+      })
+      .catch(err => {
+        console.error('Direct API test error:', err);
+      });
+  }, []);
+
   const questionsPerPage = 10;
   const startIndex = (currentPage - 1) * questionsPerPage;
   const currentQuestions = questions.slice(startIndex, startIndex + questionsPerPage);
