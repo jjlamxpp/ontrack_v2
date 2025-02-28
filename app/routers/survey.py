@@ -6,6 +6,8 @@ from fastapi.responses import FileResponse, JSONResponse
 import os
 from pathlib import Path
 import shutil
+import traceback
+import pandas as pd
 
 router = APIRouter()
 
@@ -43,16 +45,89 @@ def init_icon_directories():
 # Initialize directories when the module loads
 init_icon_directories()
 
+# Add this line at the top to initialize the logger
+logger = logging.getLogger(__name__)
+
 @router.get("/questions")
 async def get_questions():
     try:
-        questions = db.get_all_questions()
+        logger.info(f"Attempting to get questions from database at {database_path}")
+        logger.info(f"Database file exists: {os.path.exists(database_path)}")
+        
+        # Try to open the database file to verify access
+        try:
+            with open(database_path, 'rb') as f:
+                logger.info(f"Successfully opened database file, size: {len(f.read())} bytes")
+        except Exception as e:
+            logger.error(f"Failed to open database file: {str(e)}")
+            return JSONResponse(
+                status_code=500,
+                content={"detail": f"Failed to open database file: {str(e)}"}
+            )
+        
+        # Try both methods to be safe
+        try:
+            # First try get_all_questions (your original method)
+            questions = db.get_all_questions()
+        except AttributeError:
+            # If that fails, try direct pandas access as a fallback
+            try:
+                logger.info("Falling back to direct Excel access")
+                df = pd.read_excel(database_path, sheet_name='Questions')
+                questions = df.to_dict('records')
+                
+                # Add id field if not present
+                for i, q in enumerate(questions):
+                    if 'id' not in q:
+                        q['id'] = i + 1
+            except Exception as excel_err:
+                logger.error(f"Failed to read Excel file directly: {str(excel_err)}")
+                raise excel_err
+        
+        logger.info(f"Successfully fetched {len(questions)} questions")
         return questions
     except Exception as e:
-        raise HTTPException(
+        logger.error(f"Error fetching questions: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(
             status_code=500,
-            detail=f"Error fetching questions: {str(e)}"
+            content={"detail": f"Error fetching questions: {str(e)}"}
         )
+
+# Add a debug endpoint to check database access
+@router.get("/debug-db")
+async def debug_database():
+    try:
+        result = {
+            "database_path": database_path,
+            "database_exists": os.path.exists(database_path),
+            "database_size": None,
+            "db_methods": dir(db),
+            "excel_sheets": None
+        }
+        
+        # Check if file exists and get size
+        if os.path.exists(database_path):
+            result["database_size"] = os.path.getsize(database_path)
+            
+            # Try to read Excel sheets
+            try:
+                xls = pd.ExcelFile(database_path)
+                result["excel_sheets"] = xls.sheet_names
+                
+                # Try to read Questions sheet
+                if 'Questions' in xls.sheet_names:
+                    df = pd.read_excel(database_path, sheet_name='Questions')
+                    result["questions_count"] = len(df)
+                    result["questions_columns"] = df.columns.tolist()
+                    result["sample_question"] = df.iloc[0].to_dict() if not df.empty else None
+            except Exception as e:
+                result["excel_error"] = str(e)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Debug database error: {str(e)}")
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 @router.post("/submit")
 async def submit_survey(response: SurveyResponse):
@@ -224,14 +299,32 @@ async def get_school_logo(filename: str):
         print(f"Error serving school logo: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
-# Add this new endpoint for testing API connectivity
 @router.get("/test")
 async def test_survey_api():
     """Test endpoint to verify API connectivity"""
     logger.info("Test survey API endpoint called")
     try:
         # Try to access the database
-        question_count = len(db.get_questions())
+        db_methods = [method for method in dir(db) if not method.startswith('__')]
+        
+        # Check if get_questions or get_all_questions exists
+        has_get_questions = 'get_questions' in db_methods
+        has_get_all_questions = 'get_all_questions' in db_methods
+        
+        # Try to get question count safely
+        question_count = 0
+        try:
+            if has_get_all_questions:
+                question_count = len(db.get_all_questions())
+            elif has_get_questions:
+                question_count = len(db.get_questions())
+            else:
+                # Direct Excel access as fallback
+                df = pd.read_excel(database_path, sheet_name='Questions')
+                question_count = len(df)
+        except Exception as count_err:
+            logger.error(f"Error getting question count: {str(count_err)}")
+        
         return JSONResponse(
             status_code=200,
             content={
@@ -239,7 +332,10 @@ async def test_survey_api():
                 "message": "Survey API is working",
                 "question_count": question_count,
                 "database_path": database_path,
-                "database_exists": os.path.exists(database_path)
+                "database_exists": os.path.exists(database_path),
+                "available_methods": db_methods,
+                "has_get_questions": has_get_questions,
+                "has_get_all_questions": has_get_all_questions
             }
         )
     except Exception as e:
@@ -250,6 +346,7 @@ async def test_survey_api():
                 "status": "error",
                 "message": str(e),
                 "database_path": database_path,
-                "database_exists": os.path.exists(database_path)
+                "database_exists": os.path.exists(database_path),
+                "traceback": traceback.format_exc()
             }
         )
