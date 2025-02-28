@@ -1,15 +1,20 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// Use the current window location to determine the API URL
-// Add fallback for production environment
+// Configure API base URL with support for separate frontend/backend domains
 const API_BASE_URL = (() => {
-  // Check if we're in a production environment (like render.com)
+  // Check if we're in a production environment
   const isProduction = window.location.hostname !== 'localhost' && 
                       !window.location.hostname.includes('127.0.0.1');
   
   if (isProduction) {
-    // In production, use the same origin for API calls
-    return `${window.location.origin}/api`;
+    // For production with separate frontend/backend domains
+    if (window.location.hostname === 'ontrack-v2-1.onrender.com') {
+      // Frontend is on ontrack-v2-1.onrender.com, backend is on ontrack-v2.onrender.com
+      return 'https://ontrack-v2.onrender.com/api';
+    } else {
+      // Fallback to same origin if hostname doesn't match expected frontend
+      return `${window.location.origin}/api`;
+    }
   } else {
     // In development, use localhost:8000
     return 'http://localhost:8000/api';
@@ -33,8 +38,10 @@ export async function fetchQuestions(): Promise<Question[]> {
             },
             // Add cache control to prevent caching issues
             cache: 'no-cache',
-            // Add credentials to include cookies if needed
-            credentials: 'include',
+            // Use 'omit' for cross-origin requests without credentials
+            credentials: 'omit',
+            // Add mode for CORS requests
+            mode: 'cors'
         });
         
         console.log('Response status:', response.status);
@@ -73,7 +80,8 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ answers }),
-            credentials: 'include',
+            credentials: 'omit',
+            mode: 'cors'
         });
         
         if (!response.ok) {
@@ -100,7 +108,10 @@ export async function getCharacterIcon(iconId: string): Promise<string> {
         const url = `${API_BASE_URL}/survey/icon/${cleanIconId}.png`; // Add .png extension
         
         console.log('Fetching icon from:', url);
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            mode: 'cors',
+            credentials: 'omit'
+        });
         
         if (!response.ok) {
             console.error(`Failed to load icon ${cleanIconId}, status: ${response.status}`);
@@ -123,7 +134,10 @@ export async function getSchoolLogo(school: string): Promise<string> {
         const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`;
         
         console.log('Fetching school logo from:', url);
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            mode: 'cors',
+            credentials: 'omit'
+        });
         
         if (!response.ok) {
             console.error(`Failed to load school logo for ${school}, status: ${response.status}`);
