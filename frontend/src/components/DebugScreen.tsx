@@ -1,97 +1,103 @@
-import { useState, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { ApiContext } from '../App';
 
 export function DebugScreen() {
-  const [apiStatus, setApiStatus] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const apiConfig = useContext(ApiContext);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    async function testApi() {
-      try {
-        setLoading(true);
-        
-        // Test backend health
-        const healthResponse = await fetch('/api-test');
-        const healthData = await healthResponse.json();
-        
-        // Test survey API specifically
-        const surveyTestResponse = await fetch('/api/survey/test');
-        const surveyTestData = await surveyTestResponse.json();
-        
-        setApiStatus({
-          health: healthData,
-          surveyApi: surveyTestData,
-          location: window.location,
-          localStorage: {
-            hasAnalysisResult: !!localStorage.getItem('analysisResult')
-          }
-        });
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setLoading(false);
-      }
+
+  async function testApiConnection() {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${apiConfig.apiBaseUrl}/survey/test`, {
+        mode: 'cors',
+        credentials: 'omit'
+      });
+      
+      const data = await response.json();
+      setTestResults(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
     }
-    
-    testApi();
-  }, []);
-  
+  }
+
+  useEffect(() => {
+    testApiConnection();
+  }, [apiConfig.apiBaseUrl]);
+
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">OnTrack Debug Screen</h1>
-      
-      {loading && <p>Loading diagnostic information...</p>}
-      
-      {error && (
-        <div className="p-4 bg-red-100 border border-red-300 rounded mb-4">
-          <h2 className="font-bold text-red-700">Error</h2>
-          <p>{error}</p>
-        </div>
-      )}
-      
-      {apiStatus && (
-        <div>
-          <h2 className="text-xl font-semibold mb-2">System Status</h2>
-          <pre className="bg-gray-100 p-4 rounded overflow-auto">
-            {JSON.stringify(apiStatus, null, 2)}
-          </pre>
-          
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 border rounded">
-              <h3 className="font-semibold">Navigation Tests</h3>
-              <div className="flex flex-col gap-2 mt-2">
-                <a href="/" className="text-blue-500 hover:underline">Home</a>
-                <a href="/survey/1" className="text-blue-500 hover:underline">Survey Question 1</a>
-                <a href="/result" className="text-blue-500 hover:underline">Results Page</a>
-              </div>
-            </div>
-            
-            <div className="p-4 border rounded">
-              <h3 className="font-semibold">API Tests</h3>
-              <div className="flex flex-col gap-2 mt-2">
-                <button 
-                  onClick={() => window.open('/api/survey/questions', '_blank')}
-                  className="text-blue-500 hover:underline text-left"
-                >
-                  Test Questions API
-                </button>
-                <button 
-                  onClick={() => window.open('/api/survey/test', '_blank')}
-                  className="text-blue-500 hover:underline text-left"
-                >
-                  Test Survey API
-                </button>
-                <button 
-                  onClick={() => window.open('/api-test', '_blank')}
-                  className="text-blue-500 hover:underline text-left"
-                >
-                  Test General API
-                </button>
-              </div>
-            </div>
+    <div className="min-h-screen w-full bg-[#1B2541] text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">API Debug Screen</h1>
+        
+        <div className="bg-white/10 p-6 rounded-lg mb-6">
+          <h2 className="text-xl font-semibold mb-4">API Configuration</h2>
+          <div className="space-y-2">
+            <p><strong>API Base URL:</strong> {apiConfig.apiBaseUrl}</p>
+            <p><strong>Window Location:</strong> {window.location.href}</p>
+            <p><strong>Global API URL:</strong> {window.__API_BASE_URL || 'Not set'}</p>
           </div>
         </div>
-      )}
+        
+        <div className="bg-white/10 p-6 rounded-lg mb-6">
+          <h2 className="text-xl font-semibold mb-4">API Connection Test</h2>
+          
+          {loading && <p>Testing connection...</p>}
+          
+          {error && (
+            <div className="bg-red-500/20 p-4 rounded mb-4">
+              <p className="text-red-300">Error: {error}</p>
+            </div>
+          )}
+          
+          {testResults && (
+            <div className="bg-green-500/20 p-4 rounded mb-4">
+              <h3 className="font-medium mb-2">Test Results:</h3>
+              <pre className="whitespace-pre-wrap text-sm">
+                {JSON.stringify(testResults, null, 2)}
+              </pre>
+            </div>
+          )}
+          
+          <button 
+            onClick={testApiConnection}
+            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600 mt-4"
+          >
+            Test Connection Again
+          </button>
+        </div>
+        
+        <div className="bg-white/10 p-6 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Local Storage</h2>
+          <div className="space-y-2">
+            <p><strong>Survey Answers:</strong> {localStorage.getItem('surveyAnswers') ? 'Present' : 'Not found'}</p>
+            <p><strong>Analysis Result:</strong> {localStorage.getItem('analysisResult') ? 'Present' : 'Not found'}</p>
+          </div>
+          <button 
+            onClick={() => {
+              localStorage.removeItem('surveyAnswers');
+              localStorage.removeItem('analysisResult');
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-red-500 rounded hover:bg-red-600 mt-4"
+          >
+            Clear Local Storage
+          </button>
+        </div>
+        
+        <div className="mt-6">
+          <a 
+            href="/"
+            className="px-4 py-2 bg-gray-500 rounded hover:bg-gray-600 inline-block"
+          >
+            Back to Home
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
