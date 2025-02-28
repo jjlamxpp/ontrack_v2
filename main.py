@@ -44,8 +44,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ontrack-v2-1.onrender.com", "http://localhost:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins for testing
+    allow_credentials=False,  # Set to False when using credentials: 'omit'
     allow_methods=["*"],
     allow_headers=["*"],
 )
