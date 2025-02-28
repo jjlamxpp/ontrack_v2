@@ -1,7 +1,20 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
 // Use the current window location to determine the API URL
-const API_BASE_URL = `${window.location.origin}/api`;
+// Add fallback for production environment
+const API_BASE_URL = (() => {
+  // Check if we're in a production environment (like render.com)
+  const isProduction = window.location.hostname !== 'localhost' && 
+                      !window.location.hostname.includes('127.0.0.1');
+  
+  if (isProduction) {
+    // In production, use the same origin for API calls
+    return `${window.location.origin}/api`;
+  } else {
+    // In development, use localhost:8000
+    return 'http://localhost:8000/api';
+  }
+})();
 
 console.log('Using API base URL:', API_BASE_URL);
 
@@ -29,6 +42,13 @@ export async function fetchQuestions(): Promise<Question[]> {
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Error response (${response.status}): ${errorText}`);
+            
+            // For debugging in production - add more context
+            if (response.status === 404) {
+                console.error('API endpoint not found. Check server routes configuration.');
+                console.error('Current API base:', API_BASE_URL);
+            }
+            
             throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorText}`);
         }
         
