@@ -1,9 +1,12 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// Always use the backend API URL
-const API_BASE_URL = 'https://ontrack-v2.onrender.com/api';
+// IMPORTANT: FIXED BACKEND API URL - DO NOT MODIFY
+const BACKEND_API_URL = 'https://ontrack-v2.onrender.com/api';
 
-console.log('Using API base URL:', API_BASE_URL);
+// Get API base URL from the global configuration or use the fixed backend URL
+const API_BASE_URL = window.__API_BASE_URL || BACKEND_API_URL;
+
+console.log('API service initialized with base URL:', API_BASE_URL);
 
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
@@ -11,33 +14,18 @@ export async function fetchQuestions(): Promise<Question[]> {
         const url = `${API_BASE_URL}/survey/questions`;
         console.log('Fetching questions from:', url);
         
-        // Add more detailed debugging
-        console.log('Current location:', window.location.href);
-        
         const response = await fetch(url, {
             headers: {
                 'Accept': 'application/json',
             },
-            // Add cache control to prevent caching issues
             cache: 'no-cache',
-            // Use 'omit' for cross-origin requests without credentials
             credentials: 'omit',
-            // Add mode for CORS requests
             mode: 'cors'
         });
-        
-        console.log('Response status:', response.status);
         
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Error response (${response.status}): ${errorText}`);
-            
-            // For debugging in production - add more context
-            if (response.status === 404) {
-                console.error('API endpoint not found. Check server routes configuration.');
-                console.error('Current API base:', API_BASE_URL);
-            }
-            
             throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorText}`);
         }
         
@@ -140,3 +128,12 @@ export function cleanupBlobUrl(url: string): void {
         URL.revokeObjectURL(url);
     }
 }
+
+// Runtime check to ensure correct API URL
+(() => {
+  if (API_BASE_URL !== BACKEND_API_URL) {
+    console.warn('⚠️ API_BASE_URL differs from BACKEND_API_URL');
+    console.warn(`Using: ${API_BASE_URL}`);
+    console.warn(`Fixed backend URL is: ${BACKEND_API_URL}`);
+  }
+})();
