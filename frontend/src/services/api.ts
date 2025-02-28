@@ -8,7 +8,7 @@ const API_BASE_URL = (() => {
   
   if (isProduction) {
     // For production with separate frontend/backend domains
-    if (window.location.hostname === 'ontrack-v2-1.onrender.com') {
+    if (window.location.hostname === 'https://ontrack-v2-1.onrender.com') {
       // Frontend is on ontrack-v2-1.onrender.com, backend is on ontrack-v2.onrender.com
       return 'https://ontrack-v2.onrender.com/api';
     } else {
