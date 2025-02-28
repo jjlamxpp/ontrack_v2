@@ -7,14 +7,8 @@ const API_BASE_URL = (() => {
                       !window.location.hostname.includes('127.0.0.1');
   
   if (isProduction) {
-    // For production with separate frontend/backend domains
-    if (window.location.hostname === 'https://ontrack-v2-1.onrender.com') {
-      // Frontend is on ontrack-v2-1.onrender.com, backend is on ontrack-v2.onrender.com
-      return 'https://ontrack-v2.onrender.com/api';
-    } else {
-      // Fallback to same origin if hostname doesn't match expected frontend
-      return `${window.location.origin}/api`;
-    }
+    // Always use the backend API URL in production
+    return 'https://ontrack-v2.onrender.com/api';
   } else {
     // In development, use localhost:8000
     return 'http://localhost:8000/api';
