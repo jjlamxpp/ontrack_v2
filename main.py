@@ -101,10 +101,23 @@ except Exception as e:
     logger.error(traceback.format_exc())
     raise
 
-# Add a debug endpoint to check API routing
+# Add a more comprehensive API debug endpoint
 @app.get("/api/debug")
 async def api_debug():
-    return {"status": "API is working", "routes": [{"path": route.path, "name": route.name} for route in app.routes]}
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "name": route.name,
+            "methods": getattr(route, "methods", ["GET"])
+        })
+    
+    return {
+        "status": "API is working", 
+        "routes": routes,
+        "base_dir": str(BASE_DIR),
+        "app_dir": str(APP_DIR)
+    }
 
 # Middleware to log all requests
 @app.middleware("http")
