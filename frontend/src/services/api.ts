@@ -1,19 +1,7 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// Configure API base URL with support for separate frontend/backend domains
-const API_BASE_URL = (() => {
-  // Check if we're in a production environment
-  const isProduction = window.location.hostname !== 'localhost' && 
-                      !window.location.hostname.includes('127.0.0.1');
-  
-  if (isProduction) {
-    // Always use the backend API URL in production
-    return 'https://ontrack-v2.onrender.com/api';
-  } else {
-    // In development, use localhost:8000
-    return 'http://localhost:8000/api';
-  }
-})();
+// Always use the backend API URL
+const API_BASE_URL = 'https://ontrack-v2.onrender.com/api';
 
 console.log('Using API base URL:', API_BASE_URL);
 
