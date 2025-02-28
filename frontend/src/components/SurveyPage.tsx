@@ -26,28 +26,35 @@ export function SurveyPage() {
       try {
         setLoading(true);
         setError(null);
+        
+        console.log('Attempting to fetch questions from API...');
         const data = await fetchQuestions();
         
         if (!mounted) return;
 
         if (!Array.isArray(data)) {
-          throw new Error('Invalid response format');
+          console.error('Invalid response format:', data);
+          throw new Error('Invalid response format - expected an array of questions');
         }
         
+        console.log(`Successfully loaded ${data.length} questions`);
         setQuestions(data);
         
         // Check for saved answers in localStorage
         const savedAnswers = localStorage.getItem('surveyAnswers');
         if (savedAnswers) {
+          console.log('Found saved answers in localStorage');
           setAnswers(JSON.parse(savedAnswers));
         } else {
           // Initialize empty answers array
+          console.log('Initializing empty answers array');
           setAnswers(new Array(data.length).fill(''));
         }
         
         // Validate current page against total questions
         const maxPages = Math.ceil(data.length / 10);
         if (currentPage > maxPages) {
+          console.log(`Current page (${currentPage}) exceeds max pages (${maxPages}), redirecting to page 1`);
           navigate('/survey/1', { replace: true });
         }
       } catch (err) {
@@ -75,26 +82,6 @@ export function SurveyPage() {
       localStorage.setItem('surveyAnswers', JSON.stringify(answers));
     }
   }, [answers]);
-
-  // Add this at the top of your file
-  useEffect(() => {
-    // Log the current URL to help with debugging
-    console.log('SurveyPage mounted, current URL:', window.location.href);
-    console.log('API base URL:', 'https://ontrack-v2.onrender.com/api');
-    
-    // Test the API endpoint directly
-    fetch('https://ontrack-v2.onrender.com/api/survey/questions')
-      .then(response => {
-        console.log('Direct API test response:', response.status);
-        return response.text();
-      })
-      .then(text => {
-        console.log('API response text:', text.substring(0, 100) + '...');
-      })
-      .catch(err => {
-        console.error('Direct API test error:', err);
-      });
-  }, []);
 
   const questionsPerPage = 10;
   const startIndex = (currentPage - 1) * questionsPerPage;
@@ -126,7 +113,11 @@ export function SurveyPage() {
         return;
       }
 
+      setLoading(true);
+      console.log('Submitting survey answers...');
       const result = await submitSurveyAndGetAnalysis(answers);
+      console.log('Survey submitted successfully, received analysis result');
+      
       localStorage.setItem('analysisResult', JSON.stringify(result));
       // Clear survey answers after successful submission
       localStorage.removeItem('surveyAnswers');
@@ -134,6 +125,8 @@ export function SurveyPage() {
     } catch (err) {
       console.error('Submission error:', err);
       setError(err instanceof Error ? err.message : 'Failed to submit survey');
+    } finally {
+      setLoading(false);
     }
   };
 
