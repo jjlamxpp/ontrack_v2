@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
+import { ApiContext } from '../App';
 
 export function SurveyPage() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ export function SurveyPage() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const apiConfig = useContext(ApiContext);
   
   // Get current page number with validation
   const currentPage = (() => {
@@ -28,6 +30,8 @@ export function SurveyPage() {
         setError(null);
         
         console.log('Attempting to fetch questions from API...');
+        console.log('Using API base URL:', apiConfig.apiBaseUrl);
+        
         const data = await fetchQuestions();
         
         if (!mounted) return;
@@ -74,7 +78,7 @@ export function SurveyPage() {
     return () => {
       mounted = false;
     };
-  }, []); // Only run on mount
+  }, [apiConfig.apiBaseUrl, currentPage, navigate]);
 
   // Save answers to localStorage whenever they change
   useEffect(() => {
