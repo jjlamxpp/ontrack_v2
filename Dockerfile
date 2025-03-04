@@ -1,28 +1,35 @@
-# Use a base image that supports Python; we'll add Node.js manually
+# Use a slim Python base image
 FROM python:3.9-slim
 
 # Install Node.js and npm
-RUN apt-get update && apt-get install -y nodejs npm
+RUN apt-get update && apt-get install -y curl gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
+# Set the working directory for the application
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy Python dependency file and install Python packages
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire repository
+# Copy the rest of your application (backend and frontend code)
 COPY . .
 
 # Build the frontend assets
 WORKDIR /app/frontend
 RUN npm install && npm run build
 
-# Return to the app root (assuming your backend expects built assets in a known location)
+# Copy the built frontend files (assumed to be in the "dist" folder) to the backend's static directory.
+# Adjust the destination directory to where your backend serves static files.
+RUN mkdir -p /app/app/static && cp -R dist/* /app/app/static/
+
+# Return to the app root directory
 WORKDIR /app
 
-# Expose the port (should match http_port: 8080 in your spec)
+# Expose the port your backend listens on (should match your DigitalOcean app spec's http_port)
 EXPOSE 8080
 
-# Start your Python application
+# Start the Python application
 CMD ["python", "main.py"]
