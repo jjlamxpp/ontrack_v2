@@ -138,86 +138,61 @@ async def get_survey_questions():
                 logger.warning(f"Directory {parent_dir} does not exist")
                 
             # Create a sample questions list as fallback
-            sample_questions = [
-                {
-                    "id": 1,
-                    "question_text": "I enjoy solving complex problems.",
-                    "category": "analytical",
-                    "options": ["Yes", "No"]
-                },
-                {
-                    "id": 2,
-                    "question_text": "I prefer working with people rather than data.",
-                    "category": "social",
-                    "options": ["Yes", "No"]
-                },
-                {
-                    "id": 3,
-                    "question_text": "I enjoy creative activities.",
-                    "category": "artistic",
-                    "options": ["Yes", "No"]
-                },
-                # Add more sample questions as needed
+            fallback_questions = [
+                {"id": i, "question_text": f"Sample Question {i}", "category": "general", 
+                 "options": ["Yes", "No"]}
+                for i in range(1, 11)  # Create 10 sample questions
             ]
             
-            logger.info(f"Returning {len(sample_questions)} sample questions")
-            return sample_questions
+            logger.info(f"Returning {len(fallback_questions)} sample questions")
+            return fallback_questions
         
         # Read questions from Excel file
         logger.info(f"Reading questions from Excel file: {excel_file}")
         try:
-            # List all sheet names in the Excel file
-            xls = pd.ExcelFile(excel_file)
-            sheet_names = xls.sheet_names
-            logger.info(f"Excel file sheets: {sheet_names}")
+            # Read the 'Question pool' sheet
+            df = pd.read_excel(excel_file, sheet_name='Question pool')
             
-            # Try to read the 'Question pool' sheet
-            sheet_name = 'Question pool'
-            if sheet_name not in sheet_names:
-                logger.warning(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
-                # Try to use the first sheet
-                if sheet_names:
-                    sheet_name = sheet_names[0]
-                    logger.info(f"Using first available sheet: {sheet_name}")
-                else:
-                    raise ValueError("No sheets found in Excel file")
-            
-            # Read the sheet
-            df = pd.read_excel(excel_file, sheet_name=sheet_name)
-            
-            # Log the columns and first few rows to help debug
+            # Log the columns to help debug
             logger.info(f"Excel columns: {df.columns.tolist()}")
-            logger.info(f"First row: {df.iloc[0].to_dict() if not df.empty else 'No data'}")
-            
-            # Check if DataFrame is empty
-            if df.empty:
-                logger.warning("Excel sheet is empty")
-                raise ValueError("Excel sheet is empty")
             
             # Convert DataFrame to list of questions
             questions = []
             for index, row in df.iterrows():
-                # Try to extract question text from the appropriate column
-                question_text = None
-                for col_name in ['Question', 'question', 'Question Text', 'question_text']:
-                    if col_name in df.columns and not pd.isna(row.get(col_name, None)):
-                        question_text = row[col_name]
-                        break
+                # Extract question text from the 'questions:' column
+                question_text_raw = row.get('questions:', '')
                 
-                if question_text is None or pd.isna(question_text):
-                    logger.warning(f"Skipping row {index} - no question text found")
+                # Parse the question text from the YAML-like format
+                # Format is: "- question: \"Actual question text\""
+                if isinstance(question_text_raw, str) and "question:" in question_text_raw:
+                    # Extract the text between quotes
+                    import re
+                    match = re.search(r'"([^"]*)"', question_text_raw)
+                    if match:
+                        question_text = match.group(1)
+                    else:
+                        # Try with single quotes if double quotes not found
+                        match = re.search(r"'([^']*)'", question_text_raw)
+                        if match:
+                            question_text = match.group(1)
+                        else:
+                            # If no quotes found, try to extract after "question:"
+                            parts = question_text_raw.split("question:")
+                            if len(parts) > 1:
+                                question_text = parts[1].strip().strip('"').strip("'")
+                            else:
+                                logger.warning(f"Could not parse question text from: {question_text_raw}")
+                                continue
+                else:
+                    logger.warning(f"Row {index} has invalid question format: {question_text_raw}")
                     continue
                 
-                # Try to extract category from the appropriate column
-                category = "general"
-                for cat_col in ['Category', 'category', 'Type', 'type']:
-                    if cat_col in df.columns and not pd.isna(row.get(cat_col, None)):
-                        category = str(row[cat_col])
-                        break
+                # Get category
+                category = row.get('category', 'general')
                 
                 question = {
                     "id": int(index + 1),  # Use row index + 1 as ID
-                    "question_text": str(question_text),
+                    "question_text": question_text,
                     "category": category,
                     "options": ["Yes", "No"]
                 }
