@@ -447,7 +447,91 @@ async def serve_result_route():
         logger.error(error_msg)
         return JSONResponse(status_code=404, content={"detail": error_msg})
 
-# This must be the LAST route in your file
+# Mount the survey router
+app.include_router(
+    survey_router,
+    prefix="/api/survey",
+    tags=["survey"]
+)
+
+# Add endpoints for serving icon files
+@app.get("/api/survey/icon/{icon_id}")
+async def get_icon(icon_id: str):
+    try:
+        # Ensure icon_id ends with .png
+        if not icon_id.endswith('.png'):
+            icon_id = f"{icon_id}.png"
+            
+        # Clean the filename
+        clean_filename = icon_id.replace(' ', '').replace('HTTP', '').strip()
+        
+        # Try multiple possible locations for the icon
+        possible_paths = [
+            BASE_DIR / "app" / "static" / "icon" / clean_filename,
+            BASE_DIR / "static" / "icon" / clean_filename,
+            APP_DIR / "static" / "icon" / clean_filename,
+            APP_DIR / "static" / "icons" / clean_filename
+        ]
+        
+        # Try to find the icon in any of the possible locations
+        for icon_path in possible_paths:
+            logger.info(f"Looking for icon at: {icon_path}")
+            if icon_path.exists():
+                logger.info(f"Found icon at: {icon_path}")
+                return FileResponse(
+                    path=str(icon_path),
+                    media_type="image/png",
+                    filename=clean_filename
+                )
+        
+        # If icon not found, return a 404
+        logger.error(f"No icon found for ID: {icon_id}")
+        raise HTTPException(status_code=404, detail="Icon not found")
+            
+    except Exception as e:
+        logger.error(f"Error serving icon: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=404, detail=str(e))
+
+@app.get("/api/survey/school-icon/{school_name}")
+async def get_school_logo(school_name: str):
+    try:
+        # Clean the school name
+        clean_name = school_name.lower().replace(' ', '-').strip()
+        
+        # Ensure filename ends with .png
+        if not clean_name.endswith('.png'):
+            clean_name = f"{clean_name}.png"
+        
+        # Try multiple possible locations for the school logo
+        possible_paths = [
+            BASE_DIR / "app" / "static" / "school_icon" / clean_name,
+            BASE_DIR / "static" / "school_icon" / clean_name,
+            APP_DIR / "static" / "school_icons" / clean_name,
+            APP_DIR / "static" / "school_icons" / clean_name
+        ]
+        
+        # Try to find the logo in any of the possible locations
+        for logo_path in possible_paths:
+            logger.info(f"Looking for school logo at: {logo_path}")
+            if logo_path.exists():
+                logger.info(f"Found school logo at: {logo_path}")
+                return FileResponse(
+                    path=str(logo_path),
+                    media_type="image/png",
+                    filename=clean_name
+                )
+        
+        # If logo not found, return a 404
+        logger.error(f"No school logo found for: {school_name}")
+        raise HTTPException(status_code=404, detail="School logo not found")
+            
+    except Exception as e:
+        logger.error(f"Error serving school logo: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=404, detail=str(e))
+
+# IMPORTANT: This must be the LAST route in your file - update to handle SPA routing
 @app.get("/{full_path:path}")
 async def serve_spa_routes(full_path: str):
     """Serve the frontend for any path not matched by API routes"""
@@ -459,22 +543,18 @@ async def serve_spa_routes(full_path: str):
         logger.warning(f"API route not found: /{full_path}")
         return {"error": "API endpoint not found"}
     
-    # Check if the path is for a static file
-    if frontend_dir and full_path.startswith(("assets/", "static/")):
-        file_path = frontend_dir / full_path
-        if file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
-    
     # For all other paths, serve index.html to support SPA routing
-    if frontend_dir:
-        index_path = frontend_dir / "index.html"
-        if index_path.exists():
-            logger.info(f"Serving index.html for SPA route: /{full_path}")
-            return FileResponse(index_path)
+    index_path = frontend_build_dir / "index.html"
+    if index_path.exists():
+        logger.info(f"Serving index.html for SPA route: /{full_path}")
+        return FileResponse(index_path)
     
-    # If we can't find the frontend, redirect to the home page
-    logger.warning(f"Frontend not found, redirecting to home page")
-    return RedirectResponse(url="/")
+    # If we can't find the frontend, return a 404
+    logger.warning(f"Frontend not found at {index_path}")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Frontend not found"}
+    )
 
 # Add a more comprehensive health check
 @app.get("/debug/health")
