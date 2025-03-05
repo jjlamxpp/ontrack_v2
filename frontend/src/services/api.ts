@@ -1,6 +1,6 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// Use relative URL for API endpoints
+// Always use relative URL for API endpoints
 const API_BASE_URL = '/api';
 
 console.log('API service initialized with base URL:', API_BASE_URL);
@@ -16,7 +16,6 @@ export async function fetchQuestions(): Promise<Question[]> {
                 'Accept': 'application/json',
             },
             cache: 'no-cache',
-            credentials: 'omit',
         });
         
         if (!response.ok) {
@@ -46,8 +45,6 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ answers }),
-            credentials: 'omit',
-            mode: 'cors'
         });
         
         if (!response.ok) {
@@ -74,21 +71,18 @@ export async function getCharacterIcon(iconId: string): Promise<string> {
         const url = `${API_BASE_URL}/survey/icon/${cleanIconId}.png`; // Add .png extension
         
         console.log('Fetching icon from:', url);
-        const response = await fetch(url, {
-            mode: 'cors',
-            credentials: 'omit'
-        });
+        const response = await fetch(url);
         
         if (!response.ok) {
             console.error(`Failed to load icon ${cleanIconId}, status: ${response.status}`);
-            return '/static/icon/default.png';
+            return '/fallback-icon.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading character icon:', error);
-        return '/static/icon/default.png';
+        return '/fallback-icon.png';
     }
 }
 
@@ -100,21 +94,18 @@ export async function getSchoolLogo(school: string): Promise<string> {
         const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`;
         
         console.log('Fetching school logo from:', url);
-        const response = await fetch(url, {
-            mode: 'cors',
-            credentials: 'omit'
-        });
+        const response = await fetch(url);
         
         if (!response.ok) {
             console.error(`Failed to load school logo for ${school}, status: ${response.status}`);
-            return '/static/school_icon/default.png';
+            return '/fallback-school-icon.png';
         }
 
         const blob = await response.blob();
         return URL.createObjectURL(blob);
     } catch (error) {
         console.error('Error loading school logo:', error);
-        return '/static/school_icon/default.png';
+        return '/fallback-school-icon.png';
     }
 }
 
