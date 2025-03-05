@@ -135,6 +135,9 @@ async def submit_survey(response: SurveyResponse):
         # Get the basic results from your database
         basic_result = db.process_basic_results(response.answers)
         
+        # Log the basic result for debugging
+        logger.info(f"Basic result: {basic_result}")
+        
         # Get personality type data
         personality_data = basic_result.get("personality_type", {})
         
@@ -175,6 +178,7 @@ async def submit_survey(response: SurveyResponse):
                     return None
                     
             except Exception as e:
+                logger.error(f"Error parsing JUPAS info: {str(e)}")
                 return None
 
         def parse_career_paths(career_paths):
@@ -217,11 +221,15 @@ async def submit_survey(response: SurveyResponse):
             ]
         }
 
+        # Log the final analysis result
+        logger.info(f"Analysis result: {analysis_result}")
+        
         return analysis_result
 
     except Exception as e:
         import traceback
-        traceback.print_exc()  # This will print the full stack trace
+        logger.error(f"Error processing survey: {str(e)}")
+        logger.error(traceback.format_exc())  # Log the full stack trace
         raise HTTPException(
             status_code=500,
             detail=f"Error processing survey: {str(e)}"
@@ -241,7 +249,7 @@ async def get_icon(filename: str):
         icon_path = BASE_DIR / "app" / "static" / "icon" / clean_filename
         default_icon = BASE_DIR / "app" / "static" / "icon" / "default.png"
         
-        print(f"Looking for icon at: {icon_path}")
+        logger.info(f"Looking for icon at: {icon_path}")
         
         if icon_path.exists():
             return FileResponse(
@@ -250,7 +258,7 @@ async def get_icon(filename: str):
                 filename=clean_filename
             )
         else:
-            print(f"Icon not found at {icon_path}, using default")
+            logger.warning(f"Icon not found at {icon_path}, using default")
             if default_icon.exists():
                 return FileResponse(
                     path=str(default_icon),
@@ -260,7 +268,7 @@ async def get_icon(filename: str):
             raise HTTPException(status_code=404, detail="Icon not found")
             
     except Exception as e:
-        print(f"Error serving icon: {e}")
+        logger.error(f"Error serving icon: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/school-icon/{filename}")
@@ -277,7 +285,7 @@ async def get_school_logo(filename: str):
         logo_path = BASE_DIR / "app" / "static" / "school_icon" / clean_filename
         default_logo = BASE_DIR / "app" / "static" / "school_icon" / "default.png"
         
-        print(f"Looking for school logo at: {logo_path}")
+        logger.info(f"Looking for school logo at: {logo_path}")
         
         if logo_path.exists():
             return FileResponse(
@@ -286,7 +294,7 @@ async def get_school_logo(filename: str):
                 filename=clean_filename
             )
         else:
-            print(f"School logo not found at {logo_path}, using default")
+            logger.warning(f"School logo not found at {logo_path}, using default")
             if default_logo.exists():
                 return FileResponse(
                     path=str(default_logo),
@@ -296,7 +304,7 @@ async def get_school_logo(filename: str):
             raise HTTPException(status_code=404, detail="School logo not found")
             
     except Exception as e:
-        print(f"Error serving school logo: {e}")
+        logger.error(f"Error serving school logo: {e}")
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/test")
