@@ -1,9 +1,9 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
-// IMPORTANT: FIXED BACKEND API URL - DO NOT MODIFY
-const BACKEND_API_URL = 'https://ontrack-v2.onrender.com/api';
+// Use relative URL for API endpoints
+const BACKEND_API_URL = '/api';
 
-// Get API base URL from the global configuration or use the fixed backend URL
+// Get API base URL from the global configuration or use the relative URL
 const API_BASE_URL = window.__API_BASE_URL || BACKEND_API_URL;
 
 console.log('API service initialized with base URL:', API_BASE_URL);
