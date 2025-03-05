@@ -132,14 +132,18 @@ async def debug_database():
 @router.post("/submit")
 async def submit_survey(response: SurveyResponse):
     try:
+        # Log the received answers
+        logger.info(f"Received survey answers: {response.answers}")
+        
         # Get the basic results from your database
         basic_result = db.process_basic_results(response.answers)
         
         # Log the basic result for debugging
-        logger.info(f"Basic result: {basic_result}")
+        logger.info(f"Basic result keys: {basic_result.keys()}")
         
         # Get personality type data
         personality_data = basic_result.get("personality_type", {})
+        logger.info(f"Personality data: {personality_data}")
         
         # Calculate RIASEC scores (normalized between 0 and 1)
         category_counts = basic_result.get("category_counts", {})
@@ -148,6 +152,7 @@ async def submit_survey(response: SurveyResponse):
             category: count / max_score
             for category, count in category_counts.items()
         }
+        logger.info(f"RIASEC scores: {riasec_scores}")
 
         # Get unique industries based on industry name
         seen_industries = set()
@@ -157,29 +162,8 @@ async def submit_survey(response: SurveyResponse):
             if industry_name and industry_name not in seen_industries:
                 seen_industries.add(industry_name)
                 unique_industries.append(industry)
-
-        def parse_jupas_info(jupas_str):
-            try:
-                if not jupas_str:
-                    return None
-                    
-                # Remove extra whitespace and split by '//'
-                parts = [part.strip() for part in jupas_str.split('//') if part.strip()]
-                
-                if len(parts) >= 4:  # We expect 4 parts: subject, code, school, score
-                    jupas_info = {
-                        "subject": parts[0],
-                        "jupasCode": parts[1],
-                        "school": parts[2],
-                        "averageScore": f"{parts[3]}/7.0"
-                    }
-                    return jupas_info
-                else:
-                    return None
-                    
-            except Exception as e:
-                logger.error(f"Error parsing JUPAS info: {str(e)}")
-                return None
+        
+        logger.info(f"Found {len(unique_industries)} unique industries")
 
         def parse_career_paths(career_paths):
             if not career_paths:
@@ -191,8 +175,11 @@ async def submit_survey(response: SurveyResponse):
             
             # If it's a string, split it by '//'
             if isinstance(career_paths, str):
-                return [path.strip() for path in career_paths.split('//') if path.strip()]
+                paths = [path.strip() for path in career_paths.split('//') if path.strip()]
+                logger.info(f"Parsed {len(paths)} career paths from string")
+                return paths
             
+            logger.warning(f"Unexpected career_paths type: {type(career_paths)}")
             return []
 
         # Format the analysis result
@@ -210,19 +197,20 @@ async def submit_survey(response: SurveyResponse):
                 {
                     "id": str(idx + 1),
                     "name": industry.get("industry", "Unknown Industry"),
-                    "overview": industry.get("description", "No overview available"),
+                    "overview": industry.get("overview", "No overview available"),
                     "trending": industry.get("trending", "No trending information available"),
                     "insight": industry.get("insight", "No insight available"),
-                    "examplePaths": parse_career_paths(industry.get("career_path", [])),
-                    "education": industry.get("education", ""),
-                    "jupasInfo": parse_jupas_info(industry.get("education", ""))
+                    "examplePaths": parse_career_paths(industry.get("example_role", [])),
+                    "education": industry.get("jupas", "")
                 }
                 for idx, industry in enumerate(unique_industries)
             ]
         }
 
-        # Log the final analysis result
-        logger.info(f"Analysis result: {analysis_result}")
+        # Log the final analysis result structure
+        logger.info(f"Analysis result structure: {list(analysis_result.keys())}")
+        logger.info(f"Personality keys: {list(analysis_result['personality'].keys())}")
+        logger.info(f"Industries count: {len(analysis_result['industries'])}")
         
         return analysis_result
 
