@@ -1,10 +1,7 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 
 // Use relative URL for API endpoints
-const BACKEND_API_URL = '/api';
-
-// Get API base URL from the global configuration or use the relative URL
-const API_BASE_URL = window.__API_BASE_URL || BACKEND_API_URL;
+const API_BASE_URL = '/api';
 
 console.log('API service initialized with base URL:', API_BASE_URL);
 
@@ -20,7 +17,6 @@ export async function fetchQuestions(): Promise<Question[]> {
             },
             cache: 'no-cache',
             credentials: 'omit',
-            mode: 'cors'
         });
         
         if (!response.ok) {
@@ -128,12 +124,3 @@ export function cleanupBlobUrl(url: string): void {
         URL.revokeObjectURL(url);
     }
 }
-
-// Runtime check to ensure correct API URL
-(() => {
-  if (API_BASE_URL !== BACKEND_API_URL) {
-    console.warn('⚠️ API_BASE_URL differs from BACKEND_API_URL');
-    console.warn(`Using: ${API_BASE_URL}`);
-    console.warn(`Fixed backend URL is: ${BACKEND_API_URL}`);
-  }
-})();
