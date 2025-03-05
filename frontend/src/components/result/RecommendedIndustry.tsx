@@ -28,7 +28,6 @@ const getSchoolLogoStyles = (school: string) => {
 export function RecommendedIndustry({ industries = [] }: Props) {
   const [selectedIndustryId, setSelectedIndustryId] = useState<string>('');
   const [schoolLogos, setSchoolLogos] = useState<{ [key: string]: string }>({});
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
   useEffect(() => {
     if (industries.length > 0) {
@@ -51,8 +50,11 @@ export function RecommendedIndustry({ industries = [] }: Props) {
     if (!school || schoolLogos[school]) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/survey/school-icon/${school}`);
-      if (!response.ok) throw new Error('Failed to load school logo');
+      const response = await fetch(`/api/survey/school-icon/${school}`);
+      if (!response.ok) {
+        console.error(`Failed to load school logo: ${response.status} ${response.statusText}`);
+        throw new Error('Failed to load school logo');
+      }
       
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -73,7 +75,9 @@ export function RecommendedIndustry({ industries = [] }: Props) {
     return () => {
       // Cleanup URLs on unmount
       Object.values(schoolLogos).forEach(url => {
-        if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
       });
     };
   }, [selectedIndustryId, industries]);
