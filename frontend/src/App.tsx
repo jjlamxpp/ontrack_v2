@@ -7,13 +7,13 @@ import { useEffect, createContext, useState } from 'react';
 
 // Create a global context for API configuration
 export const ApiContext = createContext({
-  apiBaseUrl: 'https://ontrack-v2.onrender.com/api'
+  apiBaseUrl: '/api'
 });
 
 function App() {
   // Set up API configuration
   const [apiConfig] = useState({
-    apiBaseUrl: 'https://ontrack-v2.onrender.com/api'
+    apiBaseUrl: '/api'
   });
 
   // Log important information on app mount
