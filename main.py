@@ -11,6 +11,7 @@ import re
 import json
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
+import pandas as pd
 
 # Add these Pydantic models for your API
 class Question(BaseModel):
@@ -121,38 +122,90 @@ async def get_survey_questions():
     try:
         logger.info("Fetching survey questions")
         
-        # Path to the questions file
-        questions_file = APP_DIR / "data" / "questions.json"
+        # Path to the Excel file
+        excel_file = BASE_DIR / "app" / "database" / "Database.xlsx"
+        logger.info(f"Looking for Excel file at: {excel_file}")
         
-        # Check if file exists, if not create a sample one
-        if not questions_file.exists():
-            # Create a sample questions file
+        # Check if file exists
+        if not excel_file.exists():
+            logger.warning(f"Excel file not found at {excel_file}")
+            
+            # List directory contents to help debug
+            parent_dir = excel_file.parent
+            if parent_dir.exists():
+                logger.info(f"Contents of {parent_dir}: {list(parent_dir.glob('*'))}")
+            else:
+                logger.warning(f"Directory {parent_dir} does not exist")
+                
+            # Create a sample questions list as fallback
             sample_questions = [
                 {
                     "id": 1,
                     "question_text": "I enjoy solving complex problems.",
                     "category": "analytical",
-                    "options": ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"]
+                    "options": ["Yes", "No"]
                 },
-                # ... other sample questions ...
+                # Add more sample questions...
             ]
             
-            # Ensure directory exists
-            questions_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write sample questions
-            with open(questions_file, "w") as f:
-                json.dump(sample_questions, f, indent=2)
-            
-            logger.info(f"Created sample questions file at {questions_file}")
+            logger.info(f"Returning {len(sample_questions)} sample questions")
             return sample_questions
         
-        # Read questions from file
-        with open(questions_file, "r") as f:
-            questions = json.load(f)
-        
-        logger.info(f"Loaded {len(questions)} questions from {questions_file}")
-        return questions
+        # Read questions from Excel file
+        logger.info(f"Reading questions from Excel file: {excel_file}")
+        try:
+            # Read the 'Question pool' sheet specifically
+            df = pd.read_excel(excel_file, sheet_name='Question pool')
+            
+            # Log the columns to help debug
+            logger.info(f"Excel columns: {df.columns.tolist()}")
+            
+            # Convert DataFrame to list of questions
+            questions = []
+            for index, row in df.iterrows():
+                # Try to extract question text from the appropriate column
+                # Adjust the column name based on your Excel structure
+                question_text = None
+                for col_name in ['Question', 'question', 'Question Text', 'question_text']:
+                    if col_name in df.columns:
+                        question_text = row[col_name]
+                        break
+                
+                if question_text is None or pd.isna(question_text):
+                    logger.warning(f"Skipping row {index} - no question text found")
+                    continue
+                
+                # Try to extract category from the appropriate column
+                category = "general"
+                for cat_col in ['Category', 'category', 'Type', 'type']:
+                    if cat_col in df.columns and not pd.isna(row.get(cat_col, None)):
+                        category = str(row[cat_col])
+                        break
+                
+                question = {
+                    "id": int(index + 1),  # Use row index + 1 as ID
+                    "question_text": str(question_text),
+                    "category": category,
+                    "options": ["Yes", "No"]
+                }
+                questions.append(question)
+            
+            logger.info(f"Loaded {len(questions)} questions from Excel file")
+            return questions
+            
+        except Exception as excel_error:
+            logger.error(f"Error reading Excel file: {str(excel_error)}")
+            logger.error(traceback.format_exc())
+            
+            # Return a simple set of questions as fallback
+            fallback_questions = [
+                {"id": i, "question_text": f"Question {i}", "category": "general", 
+                 "options": ["Yes", "No"]}
+                for i in range(1, 43)  # Create 42 questions
+            ]
+            
+            logger.info(f"Returning {len(fallback_questions)} fallback questions")
+            return fallback_questions
         
     except Exception as e:
         logger.error(f"Error loading questions: {str(e)}")
