@@ -452,7 +452,12 @@ async def serve_result_route():
 async def serve_spa_routes(full_path: str):
     """Serve the frontend for any path not matched by API routes"""
     # Log the requested path
-    print(f"Serving SPA route: /{full_path}")
+    logger.info(f"Serving SPA route: /{full_path}")
+    
+    # Skip API routes
+    if full_path.startswith("api/"):
+        logger.warning(f"API route not found: /{full_path}")
+        return {"error": "API endpoint not found"}
     
     # Check if the path is for a static file
     if frontend_dir and full_path.startswith(("assets/", "static/")):
@@ -464,9 +469,11 @@ async def serve_spa_routes(full_path: str):
     if frontend_dir:
         index_path = frontend_dir / "index.html"
         if index_path.exists():
+            logger.info(f"Serving index.html for SPA route: /{full_path}")
             return FileResponse(index_path)
     
     # If we can't find the frontend, redirect to the home page
+    logger.warning(f"Frontend not found, redirecting to home page")
     return RedirectResponse(url="/")
 
 # Add a more comprehensive health check
