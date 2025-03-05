@@ -113,7 +113,133 @@ else:
     if frontend_dir.exists():
         logger.info(f"Frontend directory contents: {list(frontend_dir.glob('*'))}")
 
-# Update this section to handle different asset directory structures
+# IMPORTANT: Define API routes BEFORE mounting static files
+# Create a router for survey-related endpoints
+@app.get("/api/survey/questions", response_model=List[Question])
+async def get_survey_questions():
+    """Return list of survey questions"""
+    try:
+        logger.info("Fetching survey questions")
+        
+        # Path to the questions file
+        questions_file = APP_DIR / "data" / "questions.json"
+        
+        # Check if file exists, if not create a sample one
+        if not questions_file.exists():
+            # Create a sample questions file
+            sample_questions = [
+                {
+                    "id": 1,
+                    "question_text": "I enjoy solving complex problems.",
+                    "category": "analytical",
+                    "options": ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"]
+                },
+                # ... other sample questions ...
+            ]
+            
+            # Ensure directory exists
+            questions_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write sample questions
+            with open(questions_file, "w") as f:
+                json.dump(sample_questions, f, indent=2)
+            
+            logger.info(f"Created sample questions file at {questions_file}")
+            return sample_questions
+        
+        # Read questions from file
+        with open(questions_file, "r") as f:
+            questions = json.load(f)
+        
+        logger.info(f"Loaded {len(questions)} questions from {questions_file}")
+        return questions
+        
+    except Exception as e:
+        logger.error(f"Error loading questions: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to load questions: {str(e)}")
+
+@app.post("/api/survey/submit", response_model=AnalysisResult)
+async def submit_survey(survey_response: SurveyResponse):
+    """Process survey answers and return analysis"""
+    try:
+        logger.info(f"Received survey submission with {len(survey_response.answers)} answers")
+        
+        # Path to the sample analysis result file
+        analysis_file = APP_DIR / "data" / "sample_analysis.json"
+        
+        # Check if file exists, if not create a sample one
+        if not analysis_file.exists():
+            # Create a sample analysis result
+            sample_analysis = {
+                "personality": {
+                    "type": "Innovator",
+                    "description": "You are creative and analytical, with a strong drive to solve complex problems.",
+                    "interpretation": "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving.",
+                    "enjoyment": [
+                        "Solving complex problems",
+                        "Learning new technologies",
+                        "Working on creative projects"
+                    ],
+                    "your_strength": [
+                        "Creative thinking",
+                        "Analytical skills",
+                        "Adaptability"
+                    ],
+                    "iconId": "1",
+                    "riasecScores": {
+                        "R": 0.6,
+                        "I": 0.8,
+                        "A": 0.7,
+                        "S": 0.4,
+                        "E": 0.5,
+                        "C": 0.3
+                    }
+                },
+                "industries": [
+                    # ... industry data ...
+                ]
+            }
+            
+            # Ensure directory exists
+            analysis_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write sample analysis
+            with open(analysis_file, "w") as f:
+                json.dump(sample_analysis, f, indent=2)
+            
+            logger.info(f"Created sample analysis file at {analysis_file}")
+        
+        # Read analysis from file
+        with open(analysis_file, "r") as f:
+            analysis = json.load(f)
+        
+        logger.info(f"Returning analysis result")
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Error processing survey: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to process survey: {str(e)}")
+
+# Add a debug endpoint to check API functionality
+@app.get("/api/debug")
+async def api_debug():
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "methods": getattr(route, "methods", ["GET"])
+        })
+    
+    return {
+        "status": "API is working", 
+        "routes": routes,
+        "base_dir": str(BASE_DIR),
+        "app_dir": str(APP_DIR)
+    }
+
+# AFTER defining all API routes, THEN mount static files
 if frontend_build_dir.exists():
     logger.info(f"Mounting / to {frontend_build_dir}")
     
@@ -127,13 +253,12 @@ if frontend_build_dir.exists():
         if asset_path.exists() and asset_path.is_dir():
             logger.info(f"Mounting /{asset_dir} to {asset_path}")
             try:
-                # Try without the 'name' parameter
                 app.mount(f"/{asset_dir}", StaticFiles(directory=str(asset_path), html=False))
             except TypeError:
-                # Fallback if the above fails
                 app.mount(f"/{asset_dir}", StaticFiles(directory=str(asset_path)))
     
     # Mount the root directory for index.html and other files
+    # IMPORTANT: This must be the LAST mount to avoid blocking API routes
     app.mount("/", StaticFiles(directory=str(frontend_build_dir), html=True))
 
 # Ensure JavaScript files are served with the correct MIME type
@@ -146,281 +271,6 @@ async def add_js_mime_type(request: Request, call_next):
     elif path.endswith(".css"):
         response.headers["Content-Type"] = "text/css; charset=utf-8"
     return response
-
-# Add API routes - IMPORTANT: This must come BEFORE the catch-all route
-try:
-    # Add the project root to Python path
-    sys.path.append(str(BASE_DIR))
-    
-    # Make BASE_DIR available in other modules
-    os.environ["BASE_DIR"] = str(BASE_DIR)
-    
-    from app.routers import survey
-    app.include_router(
-        survey.router,
-        prefix="/api/survey",
-        tags=["survey"]
-    )
-    logger.info("Successfully loaded survey router")
-    
-    # Add direct API routes for survey functionality
-    @app.get("/api/survey/questions", response_model=List[Question])
-    async def get_survey_questions():
-        """Return the list of survey questions"""
-        try:
-            # Path to the questions JSON file
-            questions_file = APP_DIR / "data" / "questions.json"
-            
-            # Check if file exists
-            if not questions_file.exists():
-                logger.error(f"Questions file not found: {questions_file}")
-                # Create a sample questions file for testing
-                sample_questions = [
-                    {
-                        "id": i,
-                        "question_text": f"Sample question {i}?",
-                        "category": "sample",
-                        "options": ["YES", "NO"]
-                    }
-                    for i in range(1, 31)
-                ]
-                
-                # Ensure directory exists
-                questions_file.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Write sample questions
-                with open(questions_file, "w") as f:
-                    json.dump(sample_questions, f, indent=2)
-                
-                logger.info(f"Created sample questions file at {questions_file}")
-                return sample_questions
-            
-            # Read questions from file
-            with open(questions_file, "r") as f:
-                questions = json.load(f)
-            
-            logger.info(f"Loaded {len(questions)} questions from {questions_file}")
-            return questions
-            
-        except Exception as e:
-            logger.error(f"Error loading questions: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Failed to load questions: {str(e)}")
-    
-    @app.post("/api/survey/submit", response_model=AnalysisResult)
-    async def submit_survey(survey_response: SurveyResponse):
-        """Process survey answers and return analysis"""
-        try:
-            logger.info(f"Received survey submission with {len(survey_response.answers)} answers")
-            
-            # Path to the sample analysis result file
-            analysis_file = APP_DIR / "data" / "sample_analysis.json"
-            
-            # Check if file exists, if not create a sample one
-            if not analysis_file.exists():
-                # Create a sample analysis result
-                sample_analysis = {
-                    "personality": {
-                        "type": "Innovator",
-                        "description": "You are creative and analytical, with a strong drive to solve complex problems.",
-                        "interpretation": "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving.",
-                        "enjoyment": [
-                            "Solving complex problems",
-                            "Learning new technologies",
-                            "Working on creative projects"
-                        ],
-                        "your_strength": [
-                            "Creative thinking",
-                            "Analytical skills",
-                            "Adaptability"
-                        ],
-                        "iconId": "1",
-                        "riasecScores": {
-                            "R": 0.6,
-                            "I": 0.8,
-                            "A": 0.7,
-                            "S": 0.4,
-                            "E": 0.5,
-                            "C": 0.3
-                        }
-                    },
-                    "industries": [
-                        {
-                            "id": "tech",
-                            "name": "Technology",
-                            "overview": "The technology industry is rapidly evolving with new innovations emerging constantly.",
-                            "trending": "AI, machine learning, and cloud computing are among the fastest-growing areas.",
-                            "insight": "Technology roles often require continuous learning and adaptation to new tools and methodologies.",
-                            "examplePaths": [
-                                "Software Developer → Senior Developer → Technical Lead → CTO",
-                                "Data Analyst → Data Scientist → AI Specialist → Research Director"
-                            ],
-                            "education": "Computer Science // JS6963 // HKUST // 5.5"
-                        },
-                        {
-                            "id": "finance",
-                            "name": "Finance",
-                            "overview": "The finance industry involves managing money, investments, and financial systems.",
-                            "trending": "Fintech, blockchain, and algorithmic trading are transforming traditional finance.",
-                            "insight": "Finance careers often combine technical skills with business acumen.",
-                            "examplePaths": [
-                                "Financial Analyst → Investment Banker → Portfolio Manager → CFO",
-                                "Risk Analyst → Risk Manager → Chief Risk Officer"
-                            ],
-                            "education": "Finance // JS6482 // HKU // 5.8"
-                        }
-                    ]
-                }
-                
-                # Ensure directory exists
-                analysis_file.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Write sample analysis
-                with open(analysis_file, "w") as f:
-                    json.dump(sample_analysis, f, indent=2)
-                
-                logger.info(f"Created sample analysis file at {analysis_file}")
-            
-            # Read analysis from file
-            with open(analysis_file, "r") as f:
-                analysis = json.load(f)
-            
-            logger.info(f"Returning analysis result")
-            return analysis
-            
-        except Exception as e:
-            logger.error(f"Error processing survey: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Failed to process survey: {str(e)}")
-    
-    @app.get("/api/survey/icon/{icon_id}")
-    async def get_character_icon(icon_id: str):
-        """Return character icon image"""
-        try:
-            # Clean the icon_id to prevent path traversal
-            clean_id = re.sub(r'[^0-9]', '', icon_id)
-            
-            # Check for file extension
-            if not clean_id.endswith('.png'):
-                clean_id = f"{clean_id}.png"
-            
-            # Path to icons directory
-            icons_dir = APP_DIR / "static" / "icon"
-            
-            # Ensure directory exists
-            icons_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Path to the requested icon
-            icon_path = icons_dir / clean_id
-            
-            # Check if icon exists
-            if not icon_path.exists():
-                # Use default icon
-                icon_path = icons_dir / "default.png"
-                
-                # If default doesn't exist, create a simple one
-                if not icon_path.exists():
-                    # Create a simple default icon (this requires PIL)
-                    try:
-                        from PIL import Image, ImageDraw
-                        
-                        # Create a simple colored square
-                        img = Image.new('RGB', (200, 200), color=(73, 109, 137))
-                        d = ImageDraw.Draw(img)
-                        d.text((20, 70), "Default Icon", fill=(255, 255, 0))
-                        
-                        # Save the image
-                        img.save(icon_path)
-                        logger.info(f"Created default icon at {icon_path}")
-                    except ImportError:
-                        logger.warning("PIL not available, cannot create default icon")
-                        raise HTTPException(status_code=404, detail="Icon not found and cannot create default")
-            
-            logger.info(f"Serving icon from {icon_path}")
-            return FileResponse(icon_path)
-            
-        except Exception as e:
-            logger.error(f"Error serving icon: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Failed to serve icon: {str(e)}")
-    
-    @app.get("/api/survey/school-icon/{school_name}")
-    async def get_school_logo(school_name: str):
-        """Return school logo image"""
-        try:
-            # Clean the school name to prevent path traversal
-            clean_name = re.sub(r'[^a-zA-Z0-9\-]', '', school_name)
-            
-            # Check for file extension
-            if not clean_name.endswith('.png'):
-                clean_name = f"{clean_name}.png"
-            
-            # Path to school icons directory
-            school_icons_dir = APP_DIR / "static" / "school_icon"
-            
-            # Ensure directory exists
-            school_icons_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Path to the requested school icon
-            icon_path = school_icons_dir / clean_name
-            
-            # Check if icon exists
-            if not icon_path.exists():
-                # Use default icon
-                icon_path = school_icons_dir / "default.png"
-                
-                # If default doesn't exist, create a simple one
-                if not icon_path.exists():
-                    # Create a simple default icon (this requires PIL)
-                    try:
-                        from PIL import Image, ImageDraw
-                        
-                        # Create a simple colored square
-                        img = Image.new('RGB', (200, 200), color=(200, 200, 200))
-                        d = ImageDraw.Draw(img)
-                        d.text((20, 70), "School Logo", fill=(0, 0, 0))
-                        
-                        # Save the image
-                        img.save(icon_path)
-                        logger.info(f"Created default school icon at {icon_path}")
-                    except ImportError:
-                        logger.warning("PIL not available, cannot create default school icon")
-                        raise HTTPException(status_code=404, detail="School icon not found and cannot create default")
-            
-            logger.info(f"Serving school icon from {icon_path}")
-            return FileResponse(icon_path)
-            
-        except Exception as e:
-            logger.error(f"Error serving school icon: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise HTTPException(status_code=500, detail=f"Failed to serve school icon: {str(e)}")
-    
-    # Log all registered routes for debugging
-    for route in app.routes:
-        logger.info(f"Registered route: {route.path} ({route.name})")
-        
-except Exception as e:
-    logger.error(f"Failed to load survey router: {str(e)}")
-    logger.error(traceback.format_exc())
-    raise
-
-# Add a more comprehensive API debug endpoint
-@app.get("/api/debug")
-async def api_debug():
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": route.path,
-            "name": route.name,
-            "methods": getattr(route, "methods", ["GET"])
-        })
-    
-    return {
-        "status": "API is working", 
-        "routes": routes,
-        "base_dir": str(BASE_DIR),
-        "app_dir": str(APP_DIR)
-    }
 
 # Middleware to log all requests
 @app.middleware("http")
