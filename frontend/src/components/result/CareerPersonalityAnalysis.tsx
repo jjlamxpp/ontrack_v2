@@ -9,13 +9,16 @@ interface Props {
 
 export function CareerPersonalityAnalysis({ analysis }: Props) {
   const [iconUrl, setIconUrl] = useState<string>('');
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
+  
   useEffect(() => {
     if (analysis?.iconId) {
-      fetch(`${API_BASE_URL}/survey/icon/${analysis.iconId}`)
+      // Use a relative URL path
+      fetch(`/api/survey/icon/${analysis.iconId}`)
         .then(response => {
-          if (!response.ok) throw new Error('Failed to load icon');
+          if (!response.ok) {
+            console.error(`Failed to load icon: ${response.status} ${response.statusText}`);
+            throw new Error('Failed to load icon');
+          }
           return response.blob();
         })
         .then(blob => {
@@ -24,6 +27,7 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
         })
         .catch(error => {
           console.error('Error loading icon:', error);
+          // Use a fallback icon that we know exists
           setIconUrl('/fallback-icon.png');
         });
     }
@@ -57,17 +61,22 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
         <CardContent className="p-0">
           <div className="grid md:grid-cols-2">
             <div className="flex flex-col items-center justify-center p-8 h-[400px]">
-              {iconUrl && (
+              {iconUrl ? (
                 <div className="relative w-full h-full">
                   <img
                     src={iconUrl}
                     alt="Character Icon"
                     className="w-full h-full object-contain"
                     onError={(e) => {
+                      console.error('Image failed to load, using fallback');
                       const target = e.target as HTMLImageElement;
                       target.src = '/fallback-icon.png';
                     }}
                   />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p>Loading character icon...</p>
                 </div>
               )}
             </div>
