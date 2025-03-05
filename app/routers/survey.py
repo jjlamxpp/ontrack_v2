@@ -223,76 +223,114 @@ async def submit_survey(response: SurveyResponse):
             detail=f"Error processing survey: {str(e)}"
         )
 
-@router.get("/icon/{filename}")
-async def get_icon(filename: str):
+@router.get("/icon/{icon_id}")
+async def get_icon(icon_id: str):
     try:
-        # Ensure filename ends with .png
-        if not filename.endswith('.png'):
-            filename = f"{filename}.png"
+        # Ensure icon_id ends with .png
+        if not icon_id.endswith('.png'):
+            icon_id = f"{icon_id}.png"
             
         # Clean the filename
-        clean_filename = filename.replace(' ', '').replace('HTTP', '').strip()
+        clean_filename = icon_id.replace(' ', '').replace('HTTP', '').strip()
         
-        # Construct the full path
-        icon_path = BASE_DIR / "app" / "static" / "icon" / clean_filename
-        default_icon = BASE_DIR / "app" / "static" / "icon" / "default.png"
+        # Try multiple possible locations for the icon
+        possible_paths = [
+            BASE_DIR / "app" / "static" / "icon" / clean_filename,
+            BASE_DIR / "static" / "icon" / clean_filename,
+            BASE_DIR / "app" / "static" / "icons" / clean_filename,
+            BASE_DIR / "static" / "icons" / clean_filename
+        ]
         
-        logger.info(f"Looking for icon at: {icon_path}")
-        
-        if icon_path.exists():
-            return FileResponse(
-                path=str(icon_path),
-                media_type="image/png",
-                filename=clean_filename
-            )
-        else:
-            logger.warning(f"Icon not found at {icon_path}, using default")
-            if default_icon.exists():
+        # Try to find the icon in any of the possible locations
+        for icon_path in possible_paths:
+            logger.info(f"Looking for icon at: {icon_path}")
+            if icon_path.exists():
+                logger.info(f"Found icon at: {icon_path}")
                 return FileResponse(
-                    path=str(default_icon),
+                    path=str(icon_path),
+                    media_type="image/png",
+                    filename=clean_filename
+                )
+        
+        # If icon not found, try to find a default icon
+        default_paths = [
+            BASE_DIR / "app" / "static" / "icon" / "default.png",
+            BASE_DIR / "static" / "icon" / "default.png",
+            BASE_DIR / "app" / "static" / "icons" / "default.png",
+            BASE_DIR / "static" / "icons" / "default.png"
+        ]
+        
+        for default_path in default_paths:
+            if default_path.exists():
+                logger.warning(f"Icon not found, using default at: {default_path}")
+                return FileResponse(
+                    path=str(default_path),
                     media_type="image/png",
                     filename="default.png"
                 )
-            raise HTTPException(status_code=404, detail="Icon not found")
+        
+        # If no icon found, return a 404
+        logger.error(f"No icon found for ID: {icon_id}")
+        raise HTTPException(status_code=404, detail="Icon not found")
             
     except Exception as e:
         logger.error(f"Error serving icon: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/school-icon/{filename}")
-async def get_school_logo(filename: str):
+@router.get("/school-icon/{school_name}")
+async def get_school_logo(school_name: str):
     try:
+        # Clean the school name
+        clean_name = school_name.lower().replace(' ', '-').strip()
+        
         # Ensure filename ends with .png
-        if not filename.endswith('.png'):
-            filename = f"{filename}.png"
-            
-        # Clean the filename
-        clean_filename = filename.lower().replace(' ', '-').replace('http', '').strip()
+        if not clean_name.endswith('.png'):
+            clean_name = f"{clean_name}.png"
         
-        # Construct the full path
-        logo_path = BASE_DIR / "app" / "static" / "school_icon" / clean_filename
-        default_logo = BASE_DIR / "app" / "static" / "school_icon" / "default.png"
+        # Try multiple possible locations for the school logo
+        possible_paths = [
+            BASE_DIR / "app" / "static" / "school_icon" / clean_name,
+            BASE_DIR / "static" / "school_icon" / clean_name,
+            BASE_DIR / "app" / "static" / "school_icons" / clean_name,
+            BASE_DIR / "static" / "school_icons" / clean_name
+        ]
         
-        logger.info(f"Looking for school logo at: {logo_path}")
-        
-        if logo_path.exists():
-            return FileResponse(
-                path=str(logo_path),
-                media_type="image/png",
-                filename=clean_filename
-            )
-        else:
-            logger.warning(f"School logo not found at {logo_path}, using default")
-            if default_logo.exists():
+        # Try to find the logo in any of the possible locations
+        for logo_path in possible_paths:
+            logger.info(f"Looking for school logo at: {logo_path}")
+            if logo_path.exists():
+                logger.info(f"Found school logo at: {logo_path}")
                 return FileResponse(
-                    path=str(default_logo),
+                    path=str(logo_path),
+                    media_type="image/png",
+                    filename=clean_name
+                )
+        
+        # If logo not found, try to find a default logo
+        default_paths = [
+            BASE_DIR / "app" / "static" / "school_icon" / "default.png",
+            BASE_DIR / "static" / "school_icon" / "default.png",
+            BASE_DIR / "app" / "static" / "school_icons" / "default.png",
+            BASE_DIR / "static" / "school_icons" / "default.png"
+        ]
+        
+        for default_path in default_paths:
+            if default_path.exists():
+                logger.warning(f"School logo not found, using default at: {default_path}")
+                return FileResponse(
+                    path=str(default_path),
                     media_type="image/png",
                     filename="default.png"
                 )
-            raise HTTPException(status_code=404, detail="School logo not found")
+        
+        # If no logo found, return a 404
+        logger.error(f"No school logo found for: {school_name}")
+        raise HTTPException(status_code=404, detail="School logo not found")
             
     except Exception as e:
         logger.error(f"Error serving school logo: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/test")
