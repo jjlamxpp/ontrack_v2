@@ -12,6 +12,38 @@ import json
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
+# Add these Pydantic models for your API
+class Question(BaseModel):
+    id: int
+    question_text: str
+    category: str
+    options: List[str]
+
+class SurveyResponse(BaseModel):
+    answers: List[str]
+
+class PersonalityAnalysis(BaseModel):
+    type: str
+    description: str
+    interpretation: str
+    enjoyment: List[str]
+    your_strength: List[str]
+    iconId: str
+    riasecScores: Dict[str, float]
+
+class IndustryRecommendation(BaseModel):
+    id: str
+    name: str
+    overview: str
+    trending: str
+    insight: str
+    examplePaths: List[str]
+    education: Optional[str] = None
+
+class AnalysisResult(BaseModel):
+    personality: PersonalityAnalysis
+    industries: List[IndustryRecommendation]
+
 # Set up logging with more verbose output
 logging.basicConfig(
     level=logging.INFO,
