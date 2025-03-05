@@ -8,10 +8,12 @@ export function CareerAnalysis() {
   const navigate = useNavigate();
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeSession, setActiveSession] = useState<'personality' | 'industry'>('personality');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const savedResult = localStorage.getItem('analysisResult');
     if (!savedResult) {
+      console.log('No analysis result found in localStorage, redirecting to home');
       navigate('/', { replace: true });
       return;
     }
@@ -23,22 +25,39 @@ export function CareerAnalysis() {
     } catch (error) {
       console.error('Error parsing analysis result:', error);
       navigate('/', { replace: true });
+    } finally {
+      setLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      localStorage.removeItem('analysisResult');
+      // Don't remove the result on refresh - we'll handle that in the component mount
+      // localStorage.removeItem('analysisResult');
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  if (!result) {
+  if (loading) {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
         <div className="text-xl">Loading results...</div>
+      </div>
+    );
+  }
+
+  if (!result) {
+    return (
+      <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center flex-col gap-4">
+        <div className="text-xl">No results found</div>
+        <button 
+          onClick={() => navigate('/', { replace: true })}
+          className="px-6 py-3 bg-[#3B82F6] text-white rounded-full"
+        >
+          Return to Home
+        </button>
       </div>
     );
   }
