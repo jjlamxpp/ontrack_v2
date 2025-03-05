@@ -113,21 +113,39 @@ else:
     if frontend_dir.exists():
         logger.info(f"Frontend directory contents: {list(frontend_dir.glob('*'))}")
 
-# Mount the frontend build directory with proper MIME types
+# Update this section to handle different asset directory structures
 if frontend_build_dir.exists():
     logger.info(f"Mounting / to {frontend_build_dir}")
-    app.mount("/assets", StaticFiles(directory=str(frontend_build_dir / "assets"), name="assets", html=False))
     
-    # Ensure JavaScript files are served with the correct MIME type
-    @app.middleware("http")
-    async def add_js_mime_type(request: Request, call_next):
-        response = await call_next(request)
-        path = request.url.path
-        if path.endswith(".js"):
-            response.headers["Content-Type"] = "application/javascript; charset=utf-8"
-        elif path.endswith(".css"):
-            response.headers["Content-Type"] = "text/css; charset=utf-8"
-        return response
+    # List contents of the dist directory to find asset folders
+    dist_contents = list(frontend_build_dir.glob("*"))
+    logger.info(f"Dist directory contents: {dist_contents}")
+    
+    # Try to mount common asset directories
+    for asset_dir in ["assets", "static", "js", "css"]:
+        asset_path = frontend_build_dir / asset_dir
+        if asset_path.exists() and asset_path.is_dir():
+            logger.info(f"Mounting /{asset_dir} to {asset_path}")
+            try:
+                # Try without the 'name' parameter
+                app.mount(f"/{asset_dir}", StaticFiles(directory=str(asset_path), html=False))
+            except TypeError:
+                # Fallback if the above fails
+                app.mount(f"/{asset_dir}", StaticFiles(directory=str(asset_path)))
+    
+    # Mount the root directory for index.html and other files
+    app.mount("/", StaticFiles(directory=str(frontend_build_dir), html=True))
+
+# Ensure JavaScript files are served with the correct MIME type
+@app.middleware("http")
+async def add_js_mime_type(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.endswith(".js"):
+        response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    elif path.endswith(".css"):
+        response.headers["Content-Type"] = "text/css; charset=utf-8"
+    return response
 
 # Add API routes - IMPORTANT: This must come BEFORE the catch-all route
 try:
