@@ -447,6 +447,9 @@ async def serve_result_route():
         logger.error(error_msg)
         return JSONResponse(status_code=404, content={"detail": error_msg})
 
+# Import the survey router
+from app.routers.survey import router as survey_router
+
 # Mount the survey router
 app.include_router(
     survey_router,
