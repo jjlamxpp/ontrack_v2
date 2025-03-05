@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pathlib import Path
 import logging
 import sys
@@ -449,25 +449,46 @@ async def serve_result_route():
 
 # Catch-all route should be LAST
 @app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
+async def serve_spa_routes(full_path: str):
     """Serve the frontend for any path not matched by API routes"""
-    # This will serve index.html for any unmatched route
-    frontend_path = BASE_DIR / "frontend" / "dist" / "index.html"
-    if os.path.exists(frontend_path):
-        return FileResponse(frontend_path)
-    else:
-        # Try alternative path
-        alt_path = BASE_DIR / "frontend" / "build" / "index.html"
-        if os.path.exists(alt_path):
-            return FileResponse(alt_path)
-        else:
-            # Last resort - look for index.html in the current directory
-            for root_dir in [BASE_DIR, BASE_DIR / "app", BASE_DIR / "static"]:
-                for path in root_dir.glob("**/index.html"):
-                    return FileResponse(path)
-            
-            # If no index.html found, return a simple message
-            return {"message": "Frontend not found. Please build the frontend."}
+    # Log the requested path
+    print(f"Serving SPA route: /{full_path}")
+    
+    # Check if the path is for a static file
+    if frontend_dir and full_path.startswith(("assets/", "static/")):
+        file_path = frontend_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+    
+    # For all other paths, serve index.html to support SPA routing
+    if frontend_dir:
+        index_path = frontend_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(index_path)
+    
+    # Fallback response if frontend is not found
+    return HTMLResponse(
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>OnTrack - Page Not Found</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; background: #1B2541; color: white; }
+                .container { max-width: 800px; margin: 0 auto; padding-top: 100px; }
+                h1 { color: #3B82F6; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>OnTrack</h1>
+                <p>Page not found. Please return to the <a href="/" style="color: #3B82F6;">home page</a>.</p>
+            </div>
+        </body>
+        </html>
+        """,
+        status_code=404
+    )
 
 # Add a more comprehensive health check
 @app.get("/debug/health")
