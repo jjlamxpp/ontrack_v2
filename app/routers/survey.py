@@ -197,8 +197,8 @@ async def submit_survey(response: SurveyResponse):
                 "type": personality_data.get("role", "Default Type"),
                 "description": personality_data.get("who_you_are", "Default description"),
                 "interpretation": personality_data.get("how_this_combination", "Default interpretation"),
-                "enjoyment": personality_data.get("what_you_might_enjoy", ["No enjoyment data available"]),
-                "your_strength": personality_data.get("your_strength", ["No strength data available"]),
+                "enjoyment": parse_career_paths(personality_data.get("what_you_might_enjoy", ["No enjoyment data available"])),
+                "your_strength": parse_career_paths(personality_data.get("your_strength", ["No strength data available"])),
                 "iconId": personality_data.get("icon_id", "1"),
                 "riasecScores": riasec_scores
             },
