@@ -145,7 +145,19 @@ async def get_survey_questions():
                     "category": "analytical",
                     "options": ["Yes", "No"]
                 },
-                # Add more sample questions...
+                {
+                    "id": 2,
+                    "question_text": "I prefer working with people rather than data.",
+                    "category": "social",
+                    "options": ["Yes", "No"]
+                },
+                {
+                    "id": 3,
+                    "question_text": "I enjoy creative activities.",
+                    "category": "artistic",
+                    "options": ["Yes", "No"]
+                },
+                # Add more sample questions as needed
             ]
             
             logger.info(f"Returning {len(sample_questions)} sample questions")
@@ -154,20 +166,41 @@ async def get_survey_questions():
         # Read questions from Excel file
         logger.info(f"Reading questions from Excel file: {excel_file}")
         try:
-            # Read the 'Question pool' sheet specifically
-            df = pd.read_excel(excel_file, sheet_name='Question pool')
+            # List all sheet names in the Excel file
+            xls = pd.ExcelFile(excel_file)
+            sheet_names = xls.sheet_names
+            logger.info(f"Excel file sheets: {sheet_names}")
             
-            # Log the columns to help debug
+            # Try to read the 'Question pool' sheet
+            sheet_name = 'Question pool'
+            if sheet_name not in sheet_names:
+                logger.warning(f"Sheet '{sheet_name}' not found. Available sheets: {sheet_names}")
+                # Try to use the first sheet
+                if sheet_names:
+                    sheet_name = sheet_names[0]
+                    logger.info(f"Using first available sheet: {sheet_name}")
+                else:
+                    raise ValueError("No sheets found in Excel file")
+            
+            # Read the sheet
+            df = pd.read_excel(excel_file, sheet_name=sheet_name)
+            
+            # Log the columns and first few rows to help debug
             logger.info(f"Excel columns: {df.columns.tolist()}")
+            logger.info(f"First row: {df.iloc[0].to_dict() if not df.empty else 'No data'}")
+            
+            # Check if DataFrame is empty
+            if df.empty:
+                logger.warning("Excel sheet is empty")
+                raise ValueError("Excel sheet is empty")
             
             # Convert DataFrame to list of questions
             questions = []
             for index, row in df.iterrows():
                 # Try to extract question text from the appropriate column
-                # Adjust the column name based on your Excel structure
                 question_text = None
                 for col_name in ['Question', 'question', 'Question Text', 'question_text']:
-                    if col_name in df.columns:
+                    if col_name in df.columns and not pd.isna(row.get(col_name, None)):
                         question_text = row[col_name]
                         break
                 
@@ -191,6 +224,17 @@ async def get_survey_questions():
                 questions.append(question)
             
             logger.info(f"Loaded {len(questions)} questions from Excel file")
+            
+            # If no questions were loaded, use fallback
+            if not questions:
+                logger.warning("No valid questions found in Excel file, using fallback")
+                fallback_questions = [
+                    {"id": i, "question_text": f"Sample Question {i}", "category": "general", 
+                     "options": ["Yes", "No"]}
+                    for i in range(1, 11)  # Create 10 sample questions
+                ]
+                return fallback_questions
+            
             return questions
             
         except Exception as excel_error:
@@ -199,7 +243,7 @@ async def get_survey_questions():
             
             # Return a simple set of questions as fallback
             fallback_questions = [
-                {"id": i, "question_text": f"Question {i}", "category": "general", 
+                {"id": i, "question_text": f"Fallback Question {i}", "category": "general", 
                  "options": ["Yes", "No"]}
                 for i in range(1, 43)  # Create 42 questions
             ]
@@ -291,6 +335,55 @@ async def api_debug():
         "base_dir": str(BASE_DIR),
         "app_dir": str(APP_DIR)
     }
+
+# Add a debug endpoint to check Excel file
+@app.get("/api/debug/excel")
+async def debug_excel():
+    """Debug endpoint to check Excel file"""
+    try:
+        # Path to the Excel file
+        excel_file = BASE_DIR / "app" / "database" / "Database.xlsx"
+        
+        # Check if file exists
+        file_exists = excel_file.exists()
+        
+        result = {
+            "file_path": str(excel_file),
+            "file_exists": file_exists,
+        }
+        
+        if file_exists:
+            # Get file size
+            result["file_size"] = os.path.getsize(excel_file)
+            
+            # List sheet names
+            try:
+                xls = pd.ExcelFile(excel_file)
+                result["sheet_names"] = xls.sheet_names
+                
+                # Get sample data from each sheet
+                sheets_data = {}
+                for sheet in xls.sheet_names:
+                    df = pd.read_excel(excel_file, sheet_name=sheet)
+                    sheets_data[sheet] = {
+                        "columns": df.columns.tolist(),
+                        "row_count": len(df),
+                        "sample_row": df.iloc[0].to_dict() if not df.empty else "No data"
+                    }
+                result["sheets_data"] = sheets_data
+            except Exception as e:
+                result["excel_error"] = str(e)
+        else:
+            # List directory contents
+            parent_dir = excel_file.parent
+            if parent_dir.exists():
+                result["parent_dir_contents"] = [str(p) for p in parent_dir.glob("*")]
+            else:
+                result["parent_dir_exists"] = False
+        
+        return result
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 # AFTER defining all API routes, THEN mount static files
 if frontend_build_dir.exists():
