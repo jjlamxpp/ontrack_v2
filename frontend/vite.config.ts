@@ -11,13 +11,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
+    emptyOutDir: true,
     sourcemap: true,
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'src/index.html'),
-      },
-    }
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom']
