@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from pathlib import Path
 import logging
 import sys
@@ -447,7 +447,7 @@ async def serve_result_route():
         logger.error(error_msg)
         return JSONResponse(status_code=404, content={"detail": error_msg})
 
-# Catch-all route should be LAST
+# This must be the LAST route in your file
 @app.get("/{full_path:path}")
 async def serve_spa_routes(full_path: str):
     """Serve the frontend for any path not matched by API routes"""
@@ -466,29 +466,8 @@ async def serve_spa_routes(full_path: str):
         if index_path.exists():
             return FileResponse(index_path)
     
-    # Fallback response if frontend is not found
-    return HTMLResponse(
-        """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>OnTrack - Page Not Found</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; text-align: center; background: #1B2541; color: white; }
-                .container { max-width: 800px; margin: 0 auto; padding-top: 100px; }
-                h1 { color: #3B82F6; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>OnTrack</h1>
-                <p>Page not found. Please return to the <a href="/" style="color: #3B82F6;">home page</a>.</p>
-            </div>
-        </body>
-        </html>
-        """,
-        status_code=404
-    )
+    # If we can't find the frontend, redirect to the home page
+    return RedirectResponse(url="/")
 
 # Add a more comprehensive health check
 @app.get("/debug/health")
