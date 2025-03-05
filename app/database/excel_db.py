@@ -263,60 +263,100 @@ class SurveyDatabase:
             
         return insights
 
-    def process_basic_results(self, answers: List[str]) -> Dict:
-        """Process survey answers and generate Holland codes with mappings"""
-        # Initialize counters for each Holland code category
-        category_counts = {
-            'R': 0, 'I': 0, 'A': 0, 
-            'S': 0, 'E': 0, 'C': 0
-        }
-        
-        # Count answers for each category from the survey
-        questions = self.get_all_questions()
-        for q_idx, answer in enumerate(answers):
-            if q_idx < len(questions) and answer.lower() == 'yes':
-                category = questions[q_idx]['category']
-                if category in category_counts:
-                    category_counts[category] += 1
+    def process_basic_results(self, answers):
+        """Process survey answers and return basic results"""
+        try:
+            # Initialize category counts
+            category_counts = {
+                'R': 0, 'I': 0, 'A': 0, 'S': 0, 'E': 0, 'C': 0
+            }
+            
+            # Count answers for each category from the survey
+            questions = self.get_all_questions()
+            
+            # Log the answers and questions for debugging
+            print(f"Processing {len(answers)} answers for {len(questions)} questions")
+            
+            for q_idx, answer in enumerate(answers):
+                if q_idx < len(questions):
+                    question = questions[q_idx]
+                    category = question.get('category', '')
+                    
+                    # Only count 'Yes' answers
+                    if answer.lower() == 'yes' and category in category_counts:
+                        category_counts[category] += 1
+                        print(f"Question {q_idx+1} (Category {category}): {answer} -> Count: {category_counts[category]}")
 
-        # Convert numpy.int64 to regular Python int
-        category_counts = {k: int(v) for k, v in category_counts.items()}
+            # Convert numpy.int64 to regular Python int
+            category_counts = {k: int(v) for k, v in category_counts.items()}
+            print(f"Final category counts: {category_counts}")
 
-        # Find categories with maximum scores
-        max_score = max(category_counts.values())
-        max_cats = [cat for cat, count in category_counts.items() if count == max_score]
-        
-        # Find categories with second highest scores
-        second_score = max(count for count in category_counts.values() if count < max_score)
-        second_cats = [cat for cat, count in category_counts.items() if count == second_score]
-        
-        # Find categories with third highest scores
-        remaining_scores = [count for count in category_counts.values() if count < second_score]
-        third_score = max(remaining_scores) if remaining_scores else 0
-        third_cats = [cat for cat, count in category_counts.items() if count == third_score]
+            # Find categories with maximum scores
+            if any(category_counts.values()):  # Check if any category has a score
+                max_score = max(category_counts.values())
+                max_cats = [cat for cat, count in category_counts.items() if count == max_score]
+                
+                # Find categories with second highest scores
+                second_score = 0
+                second_cats = []
+                scores = sorted(set(category_counts.values()), reverse=True)
+                if len(scores) > 1:
+                    second_score = scores[1]
+                    second_cats = [cat for cat, count in category_counts.items() if count == second_score]
+                
+                # Find categories with third highest scores
+                third_score = 0
+                third_cats = []
+                if len(scores) > 2:
+                    third_score = scores[2]
+                    third_cats = [cat for cat, count in category_counts.items() if count == third_score]
+            else:
+                # If all categories have zero score, assign default values
+                max_cats = ['R']
+                second_cats = ['I']
+                third_cats = ['A']
+                print("Warning: All categories have zero score, using default values")
 
-        # Generate three-digit and two-digit codes
-        three_digit_codes = self._generate_code(max_cats, second_cats, third_cats)
-        two_digit_codes = self._generate_two_digit_code(max_cats, second_cats)
+            print(f"Top categories: {max_cats}, Second: {second_cats}, Third: {third_cats}")
 
-        # Get the mappings for both two-digit and three-digit codes
-        personality_type = self._get_two_digit_mapping(two_digit_codes[0])
-        industry_insights = self._get_industry_insights(three_digit_codes)
+            # Generate three-digit and two-digit codes
+            three_digit_codes = self._generate_code(max_cats, second_cats, third_cats)
+            two_digit_codes = self._generate_two_digit_code(max_cats, second_cats)
+            
+            print(f"Generated codes - Three-digit: {three_digit_codes}, Two-digit: {two_digit_codes}")
 
-        # Ensure all numeric values are Python integers, not numpy types
-        result = {
-            "category_counts": category_counts,  # Already converted above
-            "three_digit_codes": three_digit_codes,
-            "two_digit_codes": two_digit_codes,
-            "primary_code": max_cats[0] if max_cats else 'X',
-            "personality_type": personality_type,
-            "recommended_industries": industry_insights
-        }
+            # Get the mappings for both two-digit and three-digit codes
+            personality_type = self._get_two_digit_mapping(two_digit_codes[0])
+            industry_insights = self._get_industry_insights(three_digit_codes)
 
-        # Debug print
-        print("Final result:", result)
-        
-        return result
+            # Ensure all numeric values are Python integers, not numpy types
+            result = {
+                "category_counts": category_counts,
+                "three_digit_codes": three_digit_codes,
+                "two_digit_codes": two_digit_codes,
+                "primary_code": max_cats[0] if max_cats else 'X',
+                "personality_type": personality_type,
+                "recommended_industries": industry_insights
+            }
+            
+            print(f"Final result keys: {result.keys()}")
+            print(f"Personality type: {personality_type.get('role', 'Unknown')}")
+            print(f"Industries count: {len(industry_insights)}")
+            
+            return result
+        except Exception as e:
+            import traceback
+            print(f"Error in process_basic_results: {str(e)}")
+            print(traceback.format_exc())
+            # Return a minimal result to avoid breaking the frontend
+            return {
+                "category_counts": {'R': 0, 'I': 0, 'A': 0, 'S': 0, 'E': 0, 'C': 0},
+                "three_digit_codes": ["RIA"],
+                "two_digit_codes": ["RI"],
+                "primary_code": 'R',
+                "personality_type": {"role": "Default Role", "who_you_are": "Default description"},
+                "recommended_industries": []
+            }
 
     def _generate_code(self, max_cats: List[str], second_cats: List[str], third_cats: List[str]) -> List[str]:
         """Generate three-digit Holland code combinations"""
