@@ -11,9 +11,15 @@ export const ApiContext = createContext({
 });
 
 function App() {
-  // Set up API configuration
-  const [apiConfig] = useState({
-    apiBaseUrl: '/api'
+  // Set up API configuration - use window.location to determine the base URL
+  const [apiConfig] = useState(() => {
+    // Always use relative URL for API
+    const apiBaseUrl = '/api';
+    
+    // Set global variable for other components
+    window.__API_BASE_URL = apiBaseUrl;
+    
+    return { apiBaseUrl };
   });
 
   // Log important information on app mount
@@ -24,21 +30,6 @@ function App() {
     
     // Log API configuration
     console.log('Using API base URL:', apiConfig.apiBaseUrl);
-    
-    // Override any incorrect API URL settings that might be in other files
-    window.__API_BASE_URL = apiConfig.apiBaseUrl;
-    
-    // Check if we're using the correct API URL
-    if (window.location.hostname !== 'localhost' && 
-        window.location.hostname !== '127.0.0.1' && 
-        !window.__API_BASE_URL?.includes('ontrack-v2.onrender.com')) {
-      console.error('⚠️ WARNING: API URL is not set to the backend server!');
-      console.error('Current API URL:', window.__API_BASE_URL);
-      console.error('Should be:', apiConfig.apiBaseUrl);
-      
-      // Force correct URL
-      window.__API_BASE_URL = apiConfig.apiBaseUrl;
-    }
   }, [apiConfig.apiBaseUrl]);
 
   return (
