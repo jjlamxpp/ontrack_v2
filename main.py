@@ -142,9 +142,9 @@ app.add_middleware(SPAMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_origins=["*"],  # For development - restrict this in production
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods including POST
     allow_headers=["*"],
 )
 
@@ -480,40 +480,20 @@ from pydantic import BaseModel
 from typing import List
 from app.database.excel_db import SurveyDatabase
 import traceback
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from fastapi.routing import APIRoute
 
 # Define the request model for survey submission
 class SurveyRequest(BaseModel):
     answers: List[str]
 
-# Define the response models for analysis result
-class PersonalityAnalysis(BaseModel):
-    type: str
-    description: str
-    interpretation: str
-    enjoyment: List[str]
-    your_strength: List[str]
-    iconId: str
-    riasecScores: dict
-
-class IndustryRecommendation(BaseModel):
-    id: str
-    name: str
-    overview: str
-    trending: str
-    insight: str
-    examplePaths: List[str]
-    education: str = None
-
-class AnalysisResult(BaseModel):
-    personality: PersonalityAnalysis
-    industries: List[IndustryRecommendation]
-
 # Add a direct endpoint for survey submission
 @app.post("/api/survey/submit")
-async def submit_survey_direct(survey_data: SurveyRequest):
+async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
     """Process survey answers and return analysis (direct endpoint)"""
     try:
+        logger.info(f"POST request received at /api/survey/submit")
+        logger.info(f"Request headers: {request.headers}")
         logger.info(f"Processing survey with {len(survey_data.answers)} answers")
         
         # Initialize the database
@@ -598,6 +578,19 @@ async def test_survey_api():
     logger.info("Test survey API endpoint called")
     return {"status": "ok", "message": "Survey API is working"}
 
+# Add a debug endpoint to list all routes
+@app.get("/debug/routes")
+async def debug_routes():
+    """List all registered routes for debugging"""
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": getattr(route, "path", "Unknown"),
+            "name": getattr(route, "name", "Unknown"),
+            "methods": getattr(route, "methods", ["Unknown"])
+        })
+    return {"routes": routes}
+
 # IMPORTANT: Make sure this code appears BEFORE any static file mounts or catch-all routes
 # Import the survey router
 from app.routers.survey import router as survey_router
@@ -609,82 +602,12 @@ app.include_router(
     tags=["survey"]
 )
 
-# Add endpoints for serving icon files
-@app.get("/api/survey/icon/{icon_id}")
-async def get_icon(icon_id: str):
-    try:
-        # Ensure icon_id ends with .png
-        if not icon_id.endswith('.png'):
-            icon_id = f"{icon_id}.png"
-            
-        # Clean the filename
-        clean_filename = icon_id.replace(' ', '').replace('HTTP', '').strip()
-        
-        # Try multiple possible locations for the icon
-        possible_paths = [
-            BASE_DIR / "app" / "static" / "icon" / clean_filename,
-            BASE_DIR / "static" / "icon" / clean_filename,
-            APP_DIR / "static" / "icon" / clean_filename,
-            APP_DIR / "static" / "icons" / clean_filename
-        ]
-        
-        # Try to find the icon in any of the possible locations
-        for icon_path in possible_paths:
-            logger.info(f"Looking for icon at: {icon_path}")
-            if icon_path.exists():
-                logger.info(f"Found icon at: {icon_path}")
-                return FileResponse(
-                    path=str(icon_path),
-                    media_type="image/png",
-                    filename=clean_filename
-                )
-        
-        # If icon not found, return a 404
-        logger.error(f"No icon found for ID: {icon_id}")
-        raise HTTPException(status_code=404, detail="Icon not found")
-            
-    except Exception as e:
-        logger.error(f"Error serving icon: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=404, detail=str(e))
-
-@app.get("/api/survey/school-icon/{school_name}")
-async def get_school_logo(school_name: str):
-    try:
-        # Clean the school name
-        clean_name = school_name.lower().replace(' ', '-').strip()
-        
-        # Ensure filename ends with .png
-        if not clean_name.endswith('.png'):
-            clean_name = f"{clean_name}.png"
-        
-        # Try multiple possible locations for the school logo
-        possible_paths = [
-            BASE_DIR / "app" / "static" / "school_icon" / clean_name,
-            BASE_DIR / "static" / "school_icon" / clean_name,
-            APP_DIR / "static" / "school_icons" / clean_name,
-            APP_DIR / "static" / "school_icons" / clean_name
-        ]
-        
-        # Try to find the logo in any of the possible locations
-        for logo_path in possible_paths:
-            logger.info(f"Looking for school logo at: {logo_path}")
-            if logo_path.exists():
-                logger.info(f"Found school logo at: {logo_path}")
-                return FileResponse(
-                    path=str(logo_path),
-                    media_type="image/png",
-                    filename=clean_name
-                )
-        
-        # If logo not found, return a 404
-        logger.error(f"No school logo found for: {school_name}")
-        raise HTTPException(status_code=404, detail="School logo not found")
-            
-    except Exception as e:
-        logger.error(f"Error serving school logo: {e}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=404, detail=str(e))
+# Add a catch-all route for OPTIONS requests to handle CORS preflight
+@app.options("/{full_path:path}")
+async def options_route(full_path: str):
+    """Handle OPTIONS requests for CORS preflight"""
+    logger.info(f"OPTIONS request for /{full_path}")
+    return {}
 
 # IMPORTANT: This must be the LAST route in your file - update to handle SPA routing
 @app.get("/{full_path:path}")
@@ -751,17 +674,16 @@ async def health_check():
         "environment_variables": {k: v for k, v in os.environ.items() if k in ["BASE_DIR", "PORT", "PATH"]}
     }
 
-@app.get("/debug/routes")
-async def debug_routes():
-    """List all registered routes for debugging"""
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": getattr(route, "path", "Unknown"),
-            "name": getattr(route, "name", "Unknown"),
-            "methods": getattr(route, "methods", ["Unknown"])
-        })
-    return {"routes": routes}
+@app.post("/api/test-post")
+async def test_post_method(request: Request):
+    """Test endpoint to verify POST method works"""
+    try:
+        body = await request.json()
+        logger.info(f"POST test endpoint called with body: {body}")
+        return {"status": "ok", "message": "POST method is working", "received": body}
+    except Exception as e:
+        logger.error(f"Error in test POST endpoint: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
