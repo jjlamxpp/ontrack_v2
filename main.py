@@ -291,69 +291,6 @@ async def get_survey_questions():
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to load questions: {str(e)}")
 
-@app.post("/api/survey/submit", response_model=AnalysisResult)
-async def submit_survey(survey_response: SurveyResponse):
-    """Process survey answers and return analysis"""
-    try:
-        logger.info(f"Received survey submission with {len(survey_response.answers)} answers")
-        
-        # Path to the sample analysis result file
-        analysis_file = APP_DIR / "data" / "sample_analysis.json"
-        
-        # Check if file exists, if not create a sample one
-        if not analysis_file.exists():
-            # Create a sample analysis result
-            sample_analysis = {
-                "personality": {
-                    "type": "Innovator",
-                    "description": "You are creative and analytical, with a strong drive to solve complex problems.",
-                    "interpretation": "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving.",
-                    "enjoyment": [
-                        "Solving complex problems",
-                        "Learning new technologies",
-                        "Working on creative projects"
-                    ],
-                    "your_strength": [
-                        "Creative thinking",
-                        "Analytical skills",
-                        "Adaptability"
-                    ],
-                    "iconId": "1",
-                    "riasecScores": {
-                        "R": 0.6,
-                        "I": 0.8,
-                        "A": 0.7,
-                        "S": 0.4,
-                        "E": 0.5,
-                        "C": 0.3
-                    }
-                },
-                "industries": [
-                    # ... industry data ...
-                ]
-            }
-            
-            # Ensure directory exists
-            analysis_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Write sample analysis
-            with open(analysis_file, "w") as f:
-                json.dump(sample_analysis, f, indent=2)
-            
-            logger.info(f"Created sample analysis file at {analysis_file}")
-        
-        # Read analysis from file
-        with open(analysis_file, "r") as f:
-            analysis = json.load(f)
-        
-        logger.info(f"Returning analysis result")
-        return analysis
-        
-    except Exception as e:
-        logger.error(f"Error processing survey: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to process survey: {str(e)}")
-
 # Add a debug endpoint to check API functionality
 @app.get("/api/debug")
 async def api_debug():
@@ -540,10 +477,10 @@ async def serve_result_route():
 # Import the survey router
 from app.routers.survey import router as survey_router
 
-# Mount the survey router
+# Mount the survey router with the correct prefix
 app.include_router(
     survey_router,
-    prefix="/api/survey",
+    prefix="/api",  # Change this from "/api/survey" to "/api"
     tags=["survey"]
 )
 
