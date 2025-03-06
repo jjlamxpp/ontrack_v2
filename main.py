@@ -72,6 +72,47 @@ if frontend_dir.exists():
 
 app = FastAPI()
 
+# Mount static directories
+static_dir = BASE_DIR / "static"
+if not static_dir.exists():
+    static_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create icon directories if they don't exist
+    icon_dir = static_dir / "icon"
+    school_icon_dir = static_dir / "school_icon"
+    icon_dir.mkdir(exist_ok=True)
+    school_icon_dir.mkdir(exist_ok=True)
+    
+    # Copy default icons from app/static if they exist
+    app_static = BASE_DIR / "app" / "static"
+    if app_static.exists():
+        logger.info(f"Copying static files from {app_static} to {static_dir}")
+        import shutil
+        
+        # Copy icon files
+        app_icon_dir = app_static / "icon"
+        if app_icon_dir.exists():
+            for icon_file in app_icon_dir.glob("*.*"):
+                target = icon_dir / icon_file.name
+                if not target.exists():
+                    shutil.copy2(icon_file, target)
+        
+        # Copy school icon files
+        app_school_icon_dir = app_static / "school_icon"
+        if app_school_icon_dir.exists():
+            for icon_file in app_school_icon_dir.glob("*.*"):
+                target = school_icon_dir / icon_file.name
+                if not target.exists():
+                    shutil.copy2(icon_file, target)
+
+# Mount the static directory
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Also try to mount the app/static directory as a fallback
+app_static_dir = BASE_DIR / "app" / "static"
+if app_static_dir.exists() and app_static_dir != static_dir:
+    app.mount("/app/static", StaticFiles(directory=str(app_static_dir)), name="app_static")
+
 # Add middleware for SPA routing
 class SPAMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
