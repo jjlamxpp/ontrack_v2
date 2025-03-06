@@ -9,6 +9,12 @@ import shutil
 import traceback
 import pandas as pd
 import json
+from pydantic import BaseModel
+from typing import List
+import sys
+
+# Add the parent directory to sys.path to allow importing from app.database
+sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 # Change the prefix to be empty since we're mounting at /api
 router = APIRouter()
@@ -46,198 +52,108 @@ def init_icon_directories():
 # Initialize directories when the module loads
 init_icon_directories()
 
+# Define the request model
+class SurveyRequest(BaseModel):
+    answers: List[str]
+
+# Define the response models
+class PersonalityAnalysis(BaseModel):
+    type: str
+    description: str
+    interpretation: str
+    enjoyment: List[str]
+    your_strength: List[str]
+    iconId: str
+    riasecScores: dict
+
+class IndustryRecommendation(BaseModel):
+    id: str
+    name: str
+    overview: str
+    trending: str
+    insight: str
+    examplePaths: List[str]
+    education: str = None
+
+class AnalysisResult(BaseModel):
+    personality: PersonalityAnalysis
+    industries: List[IndustryRecommendation]
+
 # Update the endpoint path to match what the frontend expects
 @router.post("/survey/submit", response_model=AnalysisResult)
-async def submit_survey(survey: SurveyResponse):
-    """Submit survey answers and get analysis"""
+async def submit_survey(survey_data: SurveyRequest):
+    """Process survey answers and return analysis"""
     try:
-        logger.info(f"Received survey submission with {len(survey.answers)} answers")
+        logger.info(f"Processing survey with {len(survey_data.answers)} answers")
         
-        # Validate answers
-        if len(survey.answers) < 1:
-            raise HTTPException(status_code=400, detail="No answers provided")
-        
-        # Process the survey answers using the SurveyDatabase class
+        # Initialize the database
         try:
-            # Convert answers to the format expected by process_basic_results
-            # The answers should be "Yes" or "No" strings
-            processed_answers = survey.answers
+            # Try to find the Excel file in different possible locations
+            possible_paths = [
+                "app/database/Database.xlsx",
+                "Database.xlsx",
+                "/app/app/database/Database.xlsx"
+            ]
             
-            # Process the results using the SurveyDatabase class
-            logger.info("Processing survey results using SurveyDatabase")
-            basic_results = survey_db.process_basic_results(processed_answers)
-            logger.info(f"Basic results processed: {basic_results.keys()}")
+            db = None
+            for path in possible_paths:
+                try:
+                    logger.info(f"Trying to load database from: {path}")
+                    db = SurveyDatabase(path)
+                    logger.info(f"Successfully loaded database from: {path}")
+                    break
+                except FileNotFoundError:
+                    logger.warning(f"Database not found at: {path}")
+                    continue
             
-            # Convert the basic results to the format expected by the frontend
-            personality_type = basic_results.get("personality_type", {})
-            industry_insights = basic_results.get("recommended_industries", [])
+            if db is None:
+                raise FileNotFoundError("Could not find Database.xlsx in any expected location")
             
-            # Map the basic results to the frontend expected format
-            analysis = {
-                "personality": {
-                    "type": personality_type.get("role", "Innovator"),
-                    "iconId": "1",  # This should match an icon file in your static/icon directory
-                    "riasecScores": {
-                        "R": basic_results.get("category_counts", {}).get("R", 0),
-                        "I": basic_results.get("category_counts", {}).get("I", 0),
-                        "A": basic_results.get("category_counts", {}).get("A", 0),
-                        "S": basic_results.get("category_counts", {}).get("S", 0),
-                        "E": basic_results.get("category_counts", {}).get("E", 0),
-                        "C": basic_results.get("category_counts", {}).get("C", 0)
-                    },
-                    "description": personality_type.get("who_you_are", "You are creative and analytical, with a strong drive to solve complex problems."),
-                    "interpretation": personality_type.get("how_this_combination", "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving."),
-                    "enjoyment": personality_type.get("what_you_might_enjoy", [
-                        "Working on complex, challenging problems",
-                        "Exploring new ideas and concepts",
-                        "Creating innovative solutions"
-                    ]),
-                    "your_strength": personality_type.get("your_strength", [
-                        "Creative thinking",
-                        "Analytical skills",
-                        "Problem-solving abilities"
-                    ])
-                },
-                "industries": []
+            # Process the survey answers
+            result = db.process_basic_results(survey_data.answers)
+            
+            # Extract personality type information
+            personality_type = result.get("personality_type", {})
+            
+            # Format the personality analysis
+            personality = {
+                "type": personality_type.get("code", "XX"),
+                "description": personality_type.get("who_you_are", ""),
+                "interpretation": personality_type.get("how_this_combination", ""),
+                "enjoyment": personality_type.get("what_you_might_enjoy", []),
+                "your_strength": personality_type.get("your_strength", []),
+                "iconId": personality_type.get("icon_id", ""),
+                "riasecScores": result.get("category_counts", {})
             }
             
-            # Convert industry insights to the format expected by the frontend
-            for industry in industry_insights:
-                industry_item = {
-                    "id": industry.get("id", f"ind{len(analysis['industries']) + 1}"),
-                    "name": industry.get("industry", "Unknown Industry"),
-                    "overview": industry.get("description", "No overview available."),
-                    "trending": industry.get("trending", "No trend information available."),
-                    "insight": industry.get("insight", "No insights available."),
-                    "examplePaths": industry.get("career_path", ["No career paths available"]),
-                }
-                
-                # Add education info if available
-                if "education" in industry:
-                    industry_item["education"] = industry["education"]
-                
-                # Add jupas info if available
-                if "jupas_info" in industry:
-                    industry_item["jupasInfo"] = {
-                        "subject": industry["jupas_info"].get("subject", ""),
-                        "jupasCode": industry["jupas_info"].get("jupas_code", ""),
-                        "school": industry["jupas_info"].get("school", ""),
-                        "averageScore": industry["jupas_info"].get("average_score", "")
-                    }
-                
-                analysis["industries"].append(industry_item)
+            # Format the industry recommendations
+            industries = []
+            for industry in result.get("recommended_industries", []):
+                industries.append({
+                    "id": industry.get("matching_code", ""),
+                    "name": industry.get("industry", ""),
+                    "overview": industry.get("description", ""),
+                    "trending": industry.get("trending", ""),
+                    "insight": industry.get("insight", ""),
+                    "examplePaths": industry.get("career_path", []),
+                    "education": industry.get("education", "")
+                })
             
-            # If no industries were found, add some default ones
-            if not analysis["industries"]:
-                logger.warning("No industries found in results, adding default industries")
-                analysis["industries"] = [
-                    {
-                        "id": "tech1",
-                        "name": "Technology",
-                        "overview": "The technology industry involves developing and implementing software, hardware, and IT services.",
-                        "trending": "Growing rapidly with new innovations in AI and cloud computing.",
-                        "insight": "High demand for skilled professionals across various specializations.",
-                        "examplePaths": ["Software Developer → Senior Developer → Technical Lead → CTO"],
-                        "education": "Computer Science//JS1234//HKUST//5.0"
-                    },
-                    {
-                        "id": "finance1",
-                        "name": "Finance",
-                        "overview": "The finance industry deals with managing money, investments, and financial services.",
-                        "trending": "Evolving with fintech innovations and digital banking solutions.",
-                        "insight": "Strong career prospects with opportunities in traditional and emerging sectors.",
-                        "examplePaths": ["Financial Analyst → Senior Analyst → Finance Manager → CFO"],
-                        "education": "Finance//JS5678//HKU//4.5"
-                    }
-                ]
+            # Return the formatted result
+            return {
+                "personality": personality,
+                "industries": industries
+            }
             
-            # Save the analysis to a file for debugging purposes
-            data_dir = Path("app/data")
-            data_dir.mkdir(exist_ok=True)
-            
-            with open(data_dir / "analysis_result.json", "w") as f:
-                json.dump(analysis, f, indent=2)
-            
-            logger.info("Created analysis file at app/data/analysis_result.json")
-            logger.info(f"Returning analysis with {len(analysis['industries'])} industries")
-            
-            return analysis
-            
-        except Exception as process_error:
-            logger.error(f"Error processing survey with SurveyDatabase: {str(process_error)}")
+        except Exception as e:
+            logger.error(f"Error processing survey: {str(e)}")
+            import traceback
             logger.error(traceback.format_exc())
-            
-            # Fall back to sample data if processing fails
-            logger.info("Falling back to sample analysis data")
-            
-            # Create a sample analysis as fallback
-            analysis = {
-                "personality": {
-                    "type": "Innovator",
-                    "iconId": "1",
-                    "riasecScores": {
-                        "R": 0.7,
-                        "I": 0.9,
-                        "A": 0.6,
-                        "S": 0.4,
-                        "E": 0.8,
-                        "C": 0.5
-                    },
-                    "description": "You are creative and analytical, with a strong drive to solve complex problems.",
-                    "interpretation": "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving.",
-                    "enjoyment": [
-                        "Working on complex, challenging problems",
-                        "Exploring new ideas and concepts",
-                        "Creating innovative solutions"
-                    ],
-                    "your_strength": [
-                        "Creative thinking",
-                        "Analytical skills",
-                        "Problem-solving abilities"
-                    ]
-                },
-                "industries": [
-                    {
-                        "id": "tech1",
-                        "name": "Technology",
-                        "overview": "The technology industry involves developing and implementing software, hardware, and IT services.",
-                        "trending": "Growing rapidly with new innovations in AI and cloud computing.",
-                        "insight": "High demand for skilled professionals across various specializations.",
-                        "examplePaths": ["Software Developer → Senior Developer → Technical Lead → CTO"],
-                        "education": "Computer Science//JS1234//HKUST//5.0"
-                    },
-                    {
-                        "id": "finance1",
-                        "name": "Finance",
-                        "overview": "The finance industry deals with managing money, investments, and financial services.",
-                        "trending": "Evolving with fintech innovations and digital banking solutions.",
-                        "insight": "Strong career prospects with opportunities in traditional and emerging sectors.",
-                        "examplePaths": ["Financial Analyst → Senior Analyst → Finance Manager → CFO"],
-                        "education": "Finance//JS5678//HKU//4.5"
-                    },
-                    {
-                        "id": "consulting1",
-                        "name": "Consulting",
-                        "overview": "The consulting industry provides expert advice to businesses to improve their performance.",
-                        "trending": "Increasing demand for specialized expertise in digital transformation.",
-                        "insight": "Offers diverse project experiences and opportunities to work with various industries.",
-                        "examplePaths": ["Junior Consultant → Consultant → Senior Consultant → Partner"],
-                        "education": "Business Administration//JS9012//CUHK//4.2"
-                    }
-                ]
-            }
-            
-            # Save the fallback analysis to a file for debugging purposes
-            with open(data_dir / "fallback_analysis.json", "w") as f:
-                json.dump(analysis, f, indent=2)
-            
-            logger.info("Created fallback analysis file at app/data/fallback_analysis.json")
-            logger.info("Returning fallback analysis result")
-            
-            return analysis
+            raise HTTPException(status_code=500, detail=f"Error processing survey: {str(e)}")
         
     except Exception as e:
-        logger.error(f"Error processing survey: {str(e)}")
+        logger.error(f"Unexpected error: {str(e)}")
+        import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
