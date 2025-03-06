@@ -510,7 +510,7 @@ class AnalysisResult(BaseModel):
     industries: List[IndustryRecommendation]
 
 # Add a direct endpoint for survey submission
-@app.post("/api/survey/submit", response_model=AnalysisResult)
+@app.post("/api/survey/submit")
 async def submit_survey_direct(survey_data: SurveyRequest):
     """Process survey answers and return analysis (direct endpoint)"""
     try:
@@ -543,6 +543,7 @@ async def submit_survey_direct(survey_data: SurveyRequest):
             
             # Process the survey answers
             result = db.process_basic_results(survey_data.answers)
+            logger.info(f"Processed survey results: {result.keys()}")
             
             # Extract personality type information
             personality_type = result.get("personality_type", {})
@@ -572,20 +573,21 @@ async def submit_survey_direct(survey_data: SurveyRequest):
                 })
             
             # Return the formatted result
-            return {
+            analysis_result = {
                 "personality": personality,
                 "industries": industries
             }
             
+            logger.info(f"Returning analysis result with {len(industries)} industries")
+            return analysis_result
+            
         except Exception as e:
             logger.error(f"Error processing survey: {str(e)}")
-            import traceback
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=f"Error processing survey: {str(e)}")
         
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -603,7 +605,7 @@ from app.routers.survey import router as survey_router
 # Mount the survey router with the correct prefix
 app.include_router(
     survey_router,
-    prefix="/api",  # This will make the endpoint available at /api/survey/submit
+    prefix="/api",  # This will make the endpoint available at /api/survey/questions
     tags=["survey"]
 )
 
