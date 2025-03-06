@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.database.excel_db import SurveyDatabase
-from app.schemas.models import Question, SurveyResponse
+from app.schemas.models import Question, SurveyResponse, AnalysisResult
 import logging
 from fastapi.responses import FileResponse, JSONResponse
 import os
@@ -10,7 +10,8 @@ import traceback
 import pandas as pd
 import json
 
-router = APIRouter(prefix="/survey")
+# Change the prefix to be empty since we're mounting at /api
+router = APIRouter()
 logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -45,7 +46,8 @@ def init_icon_directories():
 # Initialize directories when the module loads
 init_icon_directories()
 
-@router.post("/submit")
+# Update the endpoint path to match what the frontend expects
+@router.post("/survey/submit", response_model=AnalysisResult)
 async def submit_survey(survey: SurveyResponse):
     """Submit survey answers and get analysis"""
     try:
@@ -84,13 +86,13 @@ async def submit_survey(survey: SurveyResponse):
                         "C": basic_results.get("category_counts", {}).get("C", 0)
                     },
                     "description": personality_type.get("who_you_are", "You are creative and analytical, with a strong drive to solve complex problems."),
-                    "interpretation": personality_type.get("interpretation", "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving."),
-                    "enjoyment": personality_type.get("enjoyment", [
+                    "interpretation": personality_type.get("how_this_combination", "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving."),
+                    "enjoyment": personality_type.get("what_you_might_enjoy", [
                         "Working on complex, challenging problems",
                         "Exploring new ideas and concepts",
                         "Creating innovative solutions"
                     ]),
-                    "your_strength": personality_type.get("strengths", [
+                    "your_strength": personality_type.get("your_strength", [
                         "Creative thinking",
                         "Analytical skills",
                         "Problem-solving abilities"
@@ -103,11 +105,11 @@ async def submit_survey(survey: SurveyResponse):
             for industry in industry_insights:
                 industry_item = {
                     "id": industry.get("id", f"ind{len(analysis['industries']) + 1}"),
-                    "name": industry.get("name", "Unknown Industry"),
-                    "overview": industry.get("overview", "No overview available."),
+                    "name": industry.get("industry", "Unknown Industry"),
+                    "overview": industry.get("description", "No overview available."),
                     "trending": industry.get("trending", "No trend information available."),
                     "insight": industry.get("insight", "No insights available."),
-                    "examplePaths": industry.get("career_paths", ["No career paths available"]),
+                    "examplePaths": industry.get("career_path", ["No career paths available"]),
                 }
                 
                 # Add education info if available
@@ -239,7 +241,7 @@ async def submit_survey(survey: SurveyResponse):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/icon/{icon_id}")
+@router.get("/survey/icon/{icon_id}")
 async def get_icon(icon_id: str):
     """Get character icon by ID"""
     try:
@@ -273,7 +275,7 @@ async def get_icon(icon_id: str):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/school-icon/{school_name}")
+@router.get("/survey/school-icon/{school_name}")
 async def get_school_icon(school_name: str):
     """Get school icon by name"""
     try:
@@ -308,7 +310,7 @@ async def get_school_icon(school_name: str):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=404, detail=str(e))
 
-@router.get("/test")
+@router.get("/survey/test")
 async def test_survey_api():
     """Test endpoint to verify API connectivity"""
     logger.info("Test survey API endpoint called")
