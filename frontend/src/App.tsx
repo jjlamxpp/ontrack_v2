@@ -30,6 +30,14 @@ function App() {
     
     // Log API configuration
     console.log('Using API base URL:', apiConfig.apiBaseUrl);
+    
+    // Handle page refresh - check if we're on a "not found" page
+    // This helps recover from 404 errors when refreshing non-root routes
+    const isNotFoundPage = document.body.textContent?.trim().toLowerCase() === 'not found';
+    if (isNotFoundPage) {
+      console.log('Detected "Not Found" page, redirecting to home');
+      window.location.href = '/';
+    }
   }, [apiConfig.apiBaseUrl]);
 
   return (
