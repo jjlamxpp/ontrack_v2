@@ -1,27 +1,21 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
+import { config } from '../config';
 
-// Always use relative URL for API endpoints
-const API_BASE_URL = '/api';
+// Use the API_URL from config
+const API_BASE_URL = config.API_URL;
 
 console.log('API service initialized with base URL:', API_BASE_URL);
 
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        const url = `${API_BASE_URL}/survey/questions`;
-        console.log('Fetching questions from:', url);
-        
-        const response = await fetch(url, {
-            headers: {
-                'Accept': 'application/json',
-            },
-            cache: 'no-cache',
-        });
+        console.log('Fetching questions from:', `${API_BASE_URL}/survey/questions`);
+        const response = await fetch(`${API_BASE_URL}/survey/questions`);
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error(`Error response (${response.status}): ${errorText}`);
-            throw new Error(`HTTP error! Status: ${response.status}. Details: ${errorText}`);
+            console.error('Error response:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
@@ -36,36 +30,26 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        const url = `${API_BASE_URL}/survey/submit`;
-        console.log('Submitting survey to:', url);
+        console.log('Submitting survey to:', `${API_BASE_URL}/survey/submit`);
         console.log('Answers being submitted:', answers);
         
-        const response = await fetch(url, {
+        const response = await fetch(`${API_BASE_URL}/survey/submit`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
             },
             body: JSON.stringify({ answers }),
         });
         
         if (!response.ok) {
-            console.error(`Error response: ${response.status} ${response.statusText}`);
-            const text = await response.text();
-            console.error('Response body:', text);
+            const errorText = await response.text();
+            console.error('Error response:', response.status, errorText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const result = await response.json();
-        console.log('Analysis result received:', result);
-        
-        // Validate the result structure
-        if (!result.personality || !result.industries) {
-            console.error('Invalid result structure:', result);
-            throw new Error('Invalid result structure received from API');
-        }
-        
-        return result;
+        const data = await response.json();
+        console.log('Analysis result received:', data);
+        return data;
     } catch (error) {
         console.error('Error submitting survey:', error);
         throw error;
