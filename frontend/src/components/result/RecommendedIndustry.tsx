@@ -28,6 +28,7 @@ const getSchoolLogoStyles = (school: string) => {
 export function RecommendedIndustry({ industries = [] }: Props) {
   const [selectedIndustryId, setSelectedIndustryId] = useState<string>('');
   const [schoolLogos, setSchoolLogos] = useState<{ [key: string]: string }>({});
+  const [logoErrors, setLogoErrors] = useState<{ [key: string]: boolean }>({});
 
   useEffect(() => {
     if (industries.length > 0) {
@@ -47,21 +48,39 @@ export function RecommendedIndustry({ industries = [] }: Props) {
   };
 
   const loadSchoolLogo = async (school: string) => {
-    if (!school || schoolLogos[school]) return;
+    if (!school || schoolLogos[school] || logoErrors[school]) return;
 
     try {
-      const response = await fetch(`/api/survey/school-icon/${school}`);
-      if (!response.ok) {
-        console.error(`Failed to load school logo: ${response.status} ${response.statusText}`);
-        throw new Error('Failed to load school logo');
-      }
+      // Try direct path first
+      const directPath = `/static/school_icon/${school.toLowerCase().replace(/\s+/g, '-')}.png`;
       
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setSchoolLogos(prev => ({ ...prev, [school]: url }));
+      // Test if the image exists
+      const img = new Image();
+      img.onload = () => {
+        setSchoolLogos(prev => ({ ...prev, [school]: directPath }));
+      };
+      img.onerror = async () => {
+        // If direct path fails, try API
+        try {
+          const response = await fetch(`/api/survey/school-icon/${school}`);
+          if (!response.ok) {
+            throw new Error('Failed to load school logo');
+          }
+          
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setSchoolLogos(prev => ({ ...prev, [school]: url }));
+        } catch (error) {
+          console.error('Error loading school logo:', error);
+          setLogoErrors(prev => ({ ...prev, [school]: true }));
+          setSchoolLogos(prev => ({ ...prev, [school]: '/static/school_icon/default.png' }));
+        }
+      };
+      img.src = directPath;
     } catch (error) {
       console.error('Error loading school logo:', error);
-      setSchoolLogos(prev => ({ ...prev, [school]: '/fallback-school-icon.png' }));
+      setLogoErrors(prev => ({ ...prev, [school]: true }));
+      setSchoolLogos(prev => ({ ...prev, [school]: '/static/school_icon/default.png' }));
     }
   };
 
@@ -82,7 +101,7 @@ export function RecommendedIndustry({ industries = [] }: Props) {
     };
   }, [selectedIndustryId, industries]);
 
-  if (!industries.length) {
+  if (industries.length === 0) {
     return (
       <div className="text-center p-8">
         <p>No industry recommendations available.</p>
@@ -90,20 +109,20 @@ export function RecommendedIndustry({ industries = [] }: Props) {
     );
   }
 
-  const selectedIndustry = industries.find(i => i.id === selectedIndustryId);
+  const selectedIndustry = industries.find(i => i.id === selectedIndustryId) || industries[0];
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-wrap gap-4 mb-8">
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-3 mb-6">
         {industries.map((industry) => (
           <button
             key={industry.id}
-            onClick={() => setSelectedIndustryId(industry.id)}
-            className={`px-6 py-3 rounded-full transition-colors ${
+            className={`px-4 py-2 rounded-full transition-colors ${
               selectedIndustryId === industry.id
                 ? 'bg-[#3B82F6] text-white'
                 : 'bg-white/10 hover:bg-white/20'
             }`}
+            onClick={() => setSelectedIndustryId(industry.id)}
           >
             {industry.name}
           </button>
@@ -128,7 +147,7 @@ export function RecommendedIndustry({ industries = [] }: Props) {
 
           <Card className="bg-white text-black p-6">
             <CardContent>
-              <h3 className="text-xl font-semibold mb-4">Industry Insight</h3>
+              <h3 className="text-xl font-semibold mb-4">Insight</h3>
               <p>{selectedIndustry.insight}</p>
             </CardContent>
           </Card>
@@ -183,7 +202,18 @@ export function RecommendedIndustry({ industries = [] }: Props) {
                     {(() => {
                       const { school } = parseEducation(selectedIndustry.education);
                       const logoUrl = schoolLogos[school];
-                      if (school && logoUrl) {
+                      const hasError = logoErrors[school];
+                      
+                      if (school && hasError) {
+                        return (
+                          <div className="text-center">
+                            <p className="text-gray-500 mb-2">{school}</p>
+                            <div className="w-32 h-32 bg-gray-200 rounded-lg mx-auto flex items-center justify-center">
+                              <span className="text-4xl">🏫</span>
+                            </div>
+                          </div>
+                        );
+                      } else if (school && logoUrl) {
                         return (
                           <div className={`relative ${getSchoolLogoStyles(school)}`}>
                             <img 
@@ -191,8 +221,10 @@ export function RecommendedIndustry({ industries = [] }: Props) {
                               alt={`${school} Logo`}
                               className="w-full h-full object-contain"
                               onError={(e) => {
+                                console.error(`School logo failed to load: ${school}`);
+                                setLogoErrors(prev => ({ ...prev, [school]: true }));
                                 const target = e.target as HTMLImageElement;
-                                target.src = '/fallback-school-icon.png';
+                                target.src = '/static/school_icon/default.png';
                               }}
                             />
                           </div>
