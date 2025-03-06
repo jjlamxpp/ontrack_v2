@@ -38,11 +38,13 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
     try {
         const url = `${API_BASE_URL}/survey/submit`;
         console.log('Submitting survey to:', url);
+        console.log('Answers being submitted:', answers);
         
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Accept': 'application/json',
             },
             body: JSON.stringify({ answers }),
         });
@@ -55,7 +57,14 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         }
         
         const result = await response.json();
-        console.log('Analysis result received');
+        console.log('Analysis result received:', result);
+        
+        // Validate the result structure
+        if (!result.personality || !result.industries) {
+            console.error('Invalid result structure:', result);
+            throw new Error('Invalid result structure received from API');
+        }
+        
         return result;
     } catch (error) {
         console.error('Error submitting survey:', error);
