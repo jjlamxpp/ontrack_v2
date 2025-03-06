@@ -9,25 +9,44 @@ export function CareerAnalysis() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeSession, setActiveSession] = useState<'personality' | 'industry'>('personality');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedResult = localStorage.getItem('analysisResult');
-    if (!savedResult) {
-      console.log('No analysis result found in localStorage, redirecting to home');
-      navigate('/', { replace: true });
-      return;
-    }
+    const loadResult = async () => {
+      try {
+        setLoading(true);
+        
+        // Try to get result from localStorage
+        const savedResult = localStorage.getItem('analysisResult');
+        
+        if (!savedResult) {
+          console.log('No analysis result found in localStorage, redirecting to home');
+          navigate('/', { replace: true });
+          return;
+        }
 
-    try {
-      const parsedResult = JSON.parse(savedResult);
-      console.log('Parsed result:', parsedResult);
-      setResult(parsedResult);
-    } catch (error) {
-      console.error('Error parsing analysis result:', error);
-      navigate('/', { replace: true });
-    } finally {
-      setLoading(false);
-    }
+        try {
+          const parsedResult = JSON.parse(savedResult);
+          console.log('Parsed result from localStorage:', parsedResult);
+          
+          // Validate the result structure
+          if (!parsedResult.personality || !parsedResult.industries) {
+            console.error('Invalid result structure:', parsedResult);
+            setError('Invalid result structure. Please retake the survey.');
+            return;
+          }
+          
+          setResult(parsedResult);
+        } catch (parseError) {
+          console.error('Error parsing analysis result:', parseError);
+          setError('Error loading results. Please retake the survey.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadResult();
   }, [navigate]);
 
   useEffect(() => {
@@ -44,6 +63,20 @@ export function CareerAnalysis() {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
         <div className="text-xl">Loading results...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center flex-col gap-4">
+        <div className="text-xl text-red-400">{error}</div>
+        <button 
+          onClick={() => navigate('/', { replace: true })}
+          className="px-6 py-3 bg-[#3B82F6] text-white rounded-full"
+        >
+          Return to Home
+        </button>
       </div>
     );
   }
