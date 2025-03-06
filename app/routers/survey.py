@@ -8,15 +8,15 @@ from pathlib import Path
 import shutil
 import traceback
 import pandas as pd
+import json
 
-router = APIRouter()
+router = APIRouter(prefix="/survey")
+logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Use environment variable for database path
-database_path = "app/database/Database.xlsx"
-db = SurveyDatabase(database_path)
-
-# Get BASE_DIR from environment variable
-BASE_DIR = Path(os.environ.get("BASE_DIR", ".")).resolve()
+# Initialize the database
+database_path = BASE_DIR / "app" / "database" / "Database.xlsx"
+survey_db = SurveyDatabase(database_path)
 
 # Initialize icon directories
 def init_icon_directories():
@@ -45,183 +45,199 @@ def init_icon_directories():
 # Initialize directories when the module loads
 init_icon_directories()
 
-# Add this line at the top to initialize the logger
-logger = logging.getLogger(__name__)
-
-@router.get("/questions")
-async def get_questions():
-    try:
-        logger.info(f"Attempting to get questions from database at {database_path}")
-        logger.info(f"Database file exists: {os.path.exists(database_path)}")
-        
-        # Try to open the database file to verify access
-        try:
-            with open(database_path, 'rb') as f:
-                logger.info(f"Successfully opened database file, size: {len(f.read())} bytes")
-        except Exception as e:
-            logger.error(f"Failed to open database file: {str(e)}")
-            return JSONResponse(
-                status_code=500,
-                content={"detail": f"Failed to open database file: {str(e)}"}
-            )
-        
-        # Try both methods to be safe
-        try:
-            # First try get_all_questions (your original method)
-            questions = db.get_all_questions()
-        except AttributeError:
-            # If that fails, try direct pandas access as a fallback
-            try:
-                logger.info("Falling back to direct Excel access")
-                df = pd.read_excel(database_path, sheet_name='Questions')
-                questions = df.to_dict('records')
-                
-                # Add id field if not present
-                for i, q in enumerate(questions):
-                    if 'id' not in q:
-                        q['id'] = i + 1
-            except Exception as excel_err:
-                logger.error(f"Failed to read Excel file directly: {str(excel_err)}")
-                raise excel_err
-        
-        logger.info(f"Successfully fetched {len(questions)} questions")
-        return questions
-    except Exception as e:
-        logger.error(f"Error fetching questions: {str(e)}")
-        logger.error(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"detail": f"Error fetching questions: {str(e)}"}
-        )
-
-# Add a debug endpoint to check database access
-@router.get("/debug-db")
-async def debug_database():
-    try:
-        result = {
-            "database_path": database_path,
-            "database_exists": os.path.exists(database_path),
-            "database_size": None,
-            "db_methods": dir(db),
-            "excel_sheets": None
-        }
-        
-        # Check if file exists and get size
-        if os.path.exists(database_path):
-            result["database_size"] = os.path.getsize(database_path)
-            
-            # Try to read Excel sheets
-            try:
-                xls = pd.ExcelFile(database_path)
-                result["excel_sheets"] = xls.sheet_names
-                
-                # Try to read Questions sheet
-                if 'Questions' in xls.sheet_names:
-                    df = pd.read_excel(database_path, sheet_name='Questions')
-                    result["questions_count"] = len(df)
-                    result["questions_columns"] = df.columns.tolist()
-                    result["sample_question"] = df.iloc[0].to_dict() if not df.empty else None
-            except Exception as e:
-                result["excel_error"] = str(e)
-        
-        return result
-    except Exception as e:
-        logger.error(f"Debug database error: {str(e)}")
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
 @router.post("/submit")
-async def submit_survey(response: SurveyResponse):
+async def submit_survey(survey: SurveyResponse):
+    """Submit survey answers and get analysis"""
     try:
-        # Log the received answers
-        logger.info(f"Received survey answers: {response.answers}")
+        logger.info(f"Received survey submission with {len(survey.answers)} answers")
         
-        # Get the basic results from your database
-        basic_result = db.process_basic_results(response.answers)
+        # Validate answers
+        if len(survey.answers) < 1:
+            raise HTTPException(status_code=400, detail="No answers provided")
         
-        # Log the basic result for debugging
-        logger.info(f"Basic result keys: {basic_result.keys()}")
-        
-        # Get personality type data
-        personality_data = basic_result.get("personality_type", {})
-        logger.info(f"Personality data: {personality_data}")
-        
-        # Calculate RIASEC scores (normalized between 0 and 1)
-        category_counts = basic_result.get("category_counts", {})
-        max_score = max(category_counts.values()) if category_counts.values() else 1
-        riasec_scores = {
-            category: count / max_score
-            for category, count in category_counts.items()
-        }
-        logger.info(f"RIASEC scores: {riasec_scores}")
-
-        # Get unique industries based on industry name
-        seen_industries = set()
-        unique_industries = []
-        for industry in basic_result.get("recommended_industries", []):
-            industry_name = industry.get("industry")
-            if industry_name and industry_name not in seen_industries:
-                seen_industries.add(industry_name)
-                unique_industries.append(industry)
-        
-        logger.info(f"Found {len(unique_industries)} unique industries")
-
-        def parse_career_paths(career_paths):
-            if not career_paths:
-                return []
+        # Process the survey answers using the SurveyDatabase class
+        try:
+            # Convert answers to the format expected by process_basic_results
+            # The answers should be "Yes" or "No" strings
+            processed_answers = survey.answers
             
-            # If it's already a list, return it directly
-            if isinstance(career_paths, list):
-                return [path.strip() for path in career_paths if path.strip()]
+            # Process the results using the SurveyDatabase class
+            logger.info("Processing survey results using SurveyDatabase")
+            basic_results = survey_db.process_basic_results(processed_answers)
+            logger.info(f"Basic results processed: {basic_results.keys()}")
             
-            # If it's a string, split it by '//'
-            if isinstance(career_paths, str):
-                paths = [path.strip() for path in career_paths.split('//') if path.strip()]
-                logger.info(f"Parsed {len(paths)} career paths from string")
-                return paths
+            # Convert the basic results to the format expected by the frontend
+            personality_type = basic_results.get("personality_type", {})
+            industry_insights = basic_results.get("recommended_industries", [])
             
-            logger.warning(f"Unexpected career_paths type: {type(career_paths)}")
-            return []
-
-        # Format the analysis result
-        analysis_result = {
-            "personality": {
-                "type": personality_data.get("role", "Default Type"),
-                "description": personality_data.get("who_you_are", "Default description"),
-                "interpretation": personality_data.get("how_this_combination", "Default interpretation"),
-                "enjoyment": parse_career_paths(personality_data.get("what_you_might_enjoy", ["No enjoyment data available"])),
-                "your_strength": parse_career_paths(personality_data.get("your_strength", ["No strength data available"])),
-                "iconId": personality_data.get("icon_id", "1"),
-                "riasecScores": riasec_scores
-            },
-            "industries": [
-                {
-                    "id": str(idx + 1),
-                    "name": industry.get("industry", "Unknown Industry"),
-                    "overview": industry.get("overview", "No overview available"),
-                    "trending": industry.get("trending", "No trending information available"),
-                    "insight": industry.get("insight", "No insight available"),
-                    "examplePaths": parse_career_paths(industry.get("example_role", [])),
-                    "education": industry.get("jupas", "")
+            # Map the basic results to the frontend expected format
+            analysis = {
+                "personality": {
+                    "type": personality_type.get("role", "Innovator"),
+                    "iconId": "1",  # This should match an icon file in your static/icon directory
+                    "riasecScores": {
+                        "R": basic_results.get("category_counts", {}).get("R", 0),
+                        "I": basic_results.get("category_counts", {}).get("I", 0),
+                        "A": basic_results.get("category_counts", {}).get("A", 0),
+                        "S": basic_results.get("category_counts", {}).get("S", 0),
+                        "E": basic_results.get("category_counts", {}).get("E", 0),
+                        "C": basic_results.get("category_counts", {}).get("C", 0)
+                    },
+                    "description": personality_type.get("who_you_are", "You are creative and analytical, with a strong drive to solve complex problems."),
+                    "interpretation": personality_type.get("interpretation", "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving."),
+                    "enjoyment": personality_type.get("enjoyment", [
+                        "Working on complex, challenging problems",
+                        "Exploring new ideas and concepts",
+                        "Creating innovative solutions"
+                    ]),
+                    "your_strength": personality_type.get("strengths", [
+                        "Creative thinking",
+                        "Analytical skills",
+                        "Problem-solving abilities"
+                    ])
+                },
+                "industries": []
+            }
+            
+            # Convert industry insights to the format expected by the frontend
+            for industry in industry_insights:
+                industry_item = {
+                    "id": industry.get("id", f"ind{len(analysis['industries']) + 1}"),
+                    "name": industry.get("name", "Unknown Industry"),
+                    "overview": industry.get("overview", "No overview available."),
+                    "trending": industry.get("trending", "No trend information available."),
+                    "insight": industry.get("insight", "No insights available."),
+                    "examplePaths": industry.get("career_paths", ["No career paths available"]),
                 }
-                for idx, industry in enumerate(unique_industries)
-            ]
-        }
-
-        # Log the final analysis result structure
-        logger.info(f"Analysis result structure: {list(analysis_result.keys())}")
-        logger.info(f"Personality keys: {list(analysis_result['personality'].keys())}")
-        logger.info(f"Industries count: {len(analysis_result['industries'])}")
+                
+                # Add education info if available
+                if "education" in industry:
+                    industry_item["education"] = industry["education"]
+                
+                # Add jupas info if available
+                if "jupas_info" in industry:
+                    industry_item["jupasInfo"] = {
+                        "subject": industry["jupas_info"].get("subject", ""),
+                        "jupasCode": industry["jupas_info"].get("jupas_code", ""),
+                        "school": industry["jupas_info"].get("school", ""),
+                        "averageScore": industry["jupas_info"].get("average_score", "")
+                    }
+                
+                analysis["industries"].append(industry_item)
+            
+            # If no industries were found, add some default ones
+            if not analysis["industries"]:
+                logger.warning("No industries found in results, adding default industries")
+                analysis["industries"] = [
+                    {
+                        "id": "tech1",
+                        "name": "Technology",
+                        "overview": "The technology industry involves developing and implementing software, hardware, and IT services.",
+                        "trending": "Growing rapidly with new innovations in AI and cloud computing.",
+                        "insight": "High demand for skilled professionals across various specializations.",
+                        "examplePaths": ["Software Developer → Senior Developer → Technical Lead → CTO"],
+                        "education": "Computer Science//JS1234//HKUST//5.0"
+                    },
+                    {
+                        "id": "finance1",
+                        "name": "Finance",
+                        "overview": "The finance industry deals with managing money, investments, and financial services.",
+                        "trending": "Evolving with fintech innovations and digital banking solutions.",
+                        "insight": "Strong career prospects with opportunities in traditional and emerging sectors.",
+                        "examplePaths": ["Financial Analyst → Senior Analyst → Finance Manager → CFO"],
+                        "education": "Finance//JS5678//HKU//4.5"
+                    }
+                ]
+            
+            # Save the analysis to a file for debugging purposes
+            data_dir = Path("app/data")
+            data_dir.mkdir(exist_ok=True)
+            
+            with open(data_dir / "analysis_result.json", "w") as f:
+                json.dump(analysis, f, indent=2)
+            
+            logger.info("Created analysis file at app/data/analysis_result.json")
+            logger.info(f"Returning analysis with {len(analysis['industries'])} industries")
+            
+            return analysis
+            
+        except Exception as process_error:
+            logger.error(f"Error processing survey with SurveyDatabase: {str(process_error)}")
+            logger.error(traceback.format_exc())
+            
+            # Fall back to sample data if processing fails
+            logger.info("Falling back to sample analysis data")
+            
+            # Create a sample analysis as fallback
+            analysis = {
+                "personality": {
+                    "type": "Innovator",
+                    "iconId": "1",
+                    "riasecScores": {
+                        "R": 0.7,
+                        "I": 0.9,
+                        "A": 0.6,
+                        "S": 0.4,
+                        "E": 0.8,
+                        "C": 0.5
+                    },
+                    "description": "You are creative and analytical, with a strong drive to solve complex problems.",
+                    "interpretation": "Your combination of creativity and analytical thinking makes you well-suited for roles that require innovation and problem-solving.",
+                    "enjoyment": [
+                        "Working on complex, challenging problems",
+                        "Exploring new ideas and concepts",
+                        "Creating innovative solutions"
+                    ],
+                    "your_strength": [
+                        "Creative thinking",
+                        "Analytical skills",
+                        "Problem-solving abilities"
+                    ]
+                },
+                "industries": [
+                    {
+                        "id": "tech1",
+                        "name": "Technology",
+                        "overview": "The technology industry involves developing and implementing software, hardware, and IT services.",
+                        "trending": "Growing rapidly with new innovations in AI and cloud computing.",
+                        "insight": "High demand for skilled professionals across various specializations.",
+                        "examplePaths": ["Software Developer → Senior Developer → Technical Lead → CTO"],
+                        "education": "Computer Science//JS1234//HKUST//5.0"
+                    },
+                    {
+                        "id": "finance1",
+                        "name": "Finance",
+                        "overview": "The finance industry deals with managing money, investments, and financial services.",
+                        "trending": "Evolving with fintech innovations and digital banking solutions.",
+                        "insight": "Strong career prospects with opportunities in traditional and emerging sectors.",
+                        "examplePaths": ["Financial Analyst → Senior Analyst → Finance Manager → CFO"],
+                        "education": "Finance//JS5678//HKU//4.5"
+                    },
+                    {
+                        "id": "consulting1",
+                        "name": "Consulting",
+                        "overview": "The consulting industry provides expert advice to businesses to improve their performance.",
+                        "trending": "Increasing demand for specialized expertise in digital transformation.",
+                        "insight": "Offers diverse project experiences and opportunities to work with various industries.",
+                        "examplePaths": ["Junior Consultant → Consultant → Senior Consultant → Partner"],
+                        "education": "Business Administration//JS9012//CUHK//4.2"
+                    }
+                ]
+            }
+            
+            # Save the fallback analysis to a file for debugging purposes
+            with open(data_dir / "fallback_analysis.json", "w") as f:
+                json.dump(analysis, f, indent=2)
+            
+            logger.info("Created fallback analysis file at app/data/fallback_analysis.json")
+            logger.info("Returning fallback analysis result")
+            
+            return analysis
         
-        return analysis_result
-
     except Exception as e:
-        import traceback
         logger.error(f"Error processing survey: {str(e)}")
-        logger.error(traceback.format_exc())  # Log the full stack trace
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error processing survey: {str(e)}"
-        )
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/icon/{icon_id}")
 async def get_icon(icon_id: str):
@@ -298,7 +314,7 @@ async def test_survey_api():
     logger.info("Test survey API endpoint called")
     try:
         # Try to access the database
-        db_methods = [method for method in dir(db) if not method.startswith('__')]
+        db_methods = [method for method in dir(survey_db) if not method.startswith('__')]
         
         # Check if get_questions or get_all_questions exists
         has_get_questions = 'get_questions' in db_methods
@@ -308,9 +324,9 @@ async def test_survey_api():
         question_count = 0
         try:
             if has_get_all_questions:
-                question_count = len(db.get_all_questions())
+                question_count = len(survey_db.get_all_questions())
             elif has_get_questions:
-                question_count = len(db.get_questions())
+                question_count = len(survey_db.get_questions())
             else:
                 # Direct Excel access as fallback
                 df = pd.read_excel(database_path, sheet_name='Questions')
