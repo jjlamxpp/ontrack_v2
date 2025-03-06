@@ -12,6 +12,10 @@ import json
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import pandas as pd
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 # Add these Pydantic models for your API
 class Question(BaseModel):
@@ -68,21 +72,36 @@ if frontend_dir.exists():
 
 app = FastAPI()
 
-# Add exception handlers for better error reporting
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {exc}")
-    logger.error(traceback.format_exc())
-    return JSONResponse(
-        status_code=500,
-        content={"detail": str(exc), "type": type(exc).__name__}
-    )
+# Add middleware for SPA routing
+class SPAMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # If the response is a 404 and the path doesn't start with /api
+        if response.status_code == 404 and not request.url.path.startswith("/api"):
+            logger.info(f"404 for non-API route: {request.url.path}, serving index.html")
+            
+            # Try to find index.html
+            index_path = frontend_dir / "index.html"
+            if index_path.exists():
+                return FileResponse(index_path)
+            
+            # Try build directory
+            index_path = frontend_build_dir / "index.html"
+            if index_path.exists():
+                return FileResponse(index_path)
+        
+        return response
 
-# Configure CORS
+# Add the SPA middleware
+app.add_middleware(SPAMiddleware)
+
+# Add other middleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for testing
-    allow_credentials=False,  # Set to False when using credentials: 'omit'
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -360,6 +379,27 @@ async def debug_excel():
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
 
+# Add a debug endpoint for API testing
+@app.get("/api/debug/test-api")
+async def test_api():
+    """Test endpoint to verify API functionality"""
+    logger.info("API test endpoint called")
+    
+    # Check for survey router
+    routers = [r for r in app.routes if hasattr(r, "path") and "/api/survey" in r.path]
+    
+    return {
+        "status": "ok",
+        "api_routes": [str(r.path) for r in app.routes if "/api/" in str(r.path)],
+        "survey_routes_count": len(routers),
+        "environment": {
+            "python_version": sys.version,
+            "working_directory": os.getcwd(),
+            "app_directory": str(APP_DIR),
+            "base_directory": str(BASE_DIR),
+        }
+    }
+
 # AFTER defining all API routes, THEN mount static files
 if frontend_build_dir.exists():
     logger.info(f"Mounting / to {frontend_build_dir}")
@@ -380,7 +420,7 @@ if frontend_build_dir.exists():
     
     # Mount the root directory for index.html and other files
     # IMPORTANT: This must be the LAST mount to avoid blocking API routes
-    app.mount("/", StaticFiles(directory=str(frontend_build_dir), html=True))
+    app.mount("/", StaticFiles(directory=str(frontend_build_dir), html=True), name="frontend")
 
 # Ensure JavaScript files are served with the correct MIME type
 @app.middleware("http")
@@ -410,15 +450,24 @@ async def log_requests(request: Request, call_next):
 
 # Root route - serve index.html
 @app.get("/")
-async def root():
+async def serve_index():
+    """Serve the index.html file"""
     index_path = frontend_build_dir / "index.html"
     if index_path.exists():
-        logger.info(f"Serving root index.html from {index_path}")
-        return FileResponse(str(index_path))
-    else:
-        error_msg = f"Frontend index.html not found at {index_path}"
-        logger.error(error_msg)
-        return JSONResponse(status_code=404, content={"detail": error_msg})
+        logger.info(f"Serving index.html from {index_path}")
+        return FileResponse(index_path)
+    
+    # Try alternative locations
+    alt_index_path = frontend_dir / "index.html"
+    if alt_index_path.exists():
+        logger.info(f"Serving index.html from alternative location: {alt_index_path}")
+        return FileResponse(alt_index_path)
+    
+    logger.error("index.html not found in any expected location")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": "Frontend index.html not found"}
+    )
 
 # IMPORTANT: Define explicit routes for SPA paths that need refresh support
 @app.get("/survey/{path_param:path}")
@@ -547,13 +596,21 @@ async def serve_spa_routes(full_path: str):
         return {"error": "API endpoint not found"}
     
     # For all other paths, serve index.html to support SPA routing
-    index_path = frontend_build_dir / "index.html"
-    if index_path.exists():
-        logger.info(f"Serving index.html for SPA route: /{full_path}")
-        return FileResponse(index_path)
+    # Try multiple possible locations for index.html
+    possible_index_paths = [
+        frontend_dir / "index.html",
+        frontend_build_dir / "index.html",
+        BASE_DIR / "frontend" / "index.html",
+        BASE_DIR / "frontend" / "dist" / "index.html"
+    ]
+    
+    for index_path in possible_index_paths:
+        if index_path.exists():
+            logger.info(f"Serving index.html from {index_path} for SPA route: /{full_path}")
+            return FileResponse(index_path)
     
     # If we can't find the frontend, return a 404
-    logger.warning(f"Frontend not found at {index_path}")
+    logger.warning(f"Frontend not found in any of the expected locations")
     return JSONResponse(
         status_code=404,
         content={"detail": "Frontend not found"}
