@@ -16,6 +16,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+from app.database.excel_db import SurveyDatabase
 
 # Add these Pydantic models for your API
 class Question(BaseModel):
@@ -480,7 +481,7 @@ from app.routers.survey import router as survey_router
 # Mount the survey router with the correct prefix
 app.include_router(
     survey_router,
-    prefix="/api",  # Change this from "/api/survey" to "/api"
+    prefix="/api",  # This will make the endpoint available at /api/survey/submit
     tags=["survey"]
 )
 
@@ -625,6 +626,125 @@ async def health_check():
         "base_directory": str(BASE_DIR),
         "environment_variables": {k: v for k, v in os.environ.items() if k in ["BASE_DIR", "PORT", "PATH"]}
     }
+
+# Import necessary modules for survey processing
+from pydantic import BaseModel
+from typing import List
+from app.database.excel_db import SurveyDatabase
+
+# Define the request model for survey submission
+class SurveyRequest(BaseModel):
+    answers: List[str]
+
+# Define the response models for analysis result
+class PersonalityAnalysis(BaseModel):
+    type: str
+    description: str
+    interpretation: str
+    enjoyment: List[str]
+    your_strength: List[str]
+    iconId: str
+    riasecScores: dict
+
+class IndustryRecommendation(BaseModel):
+    id: str
+    name: str
+    overview: str
+    trending: str
+    insight: str
+    examplePaths: List[str]
+    education: str = None
+
+class AnalysisResult(BaseModel):
+    personality: PersonalityAnalysis
+    industries: List[IndustryRecommendation]
+
+# Add a direct endpoint for survey submission
+@app.post("/api/survey/submit", response_model=AnalysisResult)
+async def submit_survey_direct(survey_data: SurveyRequest):
+    """Process survey answers and return analysis (direct endpoint)"""
+    try:
+        logger.info(f"Processing survey with {len(survey_data.answers)} answers")
+        
+        # Initialize the database
+        try:
+            # Try to find the Excel file in different possible locations
+            possible_paths = [
+                BASE_DIR / "app" / "database" / "Database.xlsx",
+                BASE_DIR / "Database.xlsx",
+                Path("/app/app/database/Database.xlsx")
+            ]
+            
+            db = None
+            for path in possible_paths:
+                try:
+                    logger.info(f"Trying to load database from: {path}")
+                    if path.exists():
+                        db = SurveyDatabase(str(path))
+                        logger.info(f"Successfully loaded database from: {path}")
+                        break
+                except Exception as db_err:
+                    logger.warning(f"Failed to load database from {path}: {str(db_err)}")
+                    continue
+            
+            if db is None:
+                logger.error("Could not find Database.xlsx in any expected location")
+                raise HTTPException(status_code=500, detail="Database file not found")
+            
+            # Process the survey answers
+            result = db.process_basic_results(survey_data.answers)
+            
+            # Extract personality type information
+            personality_type = result.get("personality_type", {})
+            
+            # Format the personality analysis
+            personality = {
+                "type": personality_type.get("code", "XX"),
+                "description": personality_type.get("who_you_are", ""),
+                "interpretation": personality_type.get("how_this_combination", ""),
+                "enjoyment": personality_type.get("what_you_might_enjoy", []),
+                "your_strength": personality_type.get("your_strength", []),
+                "iconId": personality_type.get("icon_id", ""),
+                "riasecScores": result.get("category_counts", {})
+            }
+            
+            # Format the industry recommendations
+            industries = []
+            for industry in result.get("recommended_industries", []):
+                industries.append({
+                    "id": industry.get("matching_code", ""),
+                    "name": industry.get("industry", ""),
+                    "overview": industry.get("description", ""),
+                    "trending": industry.get("trending", ""),
+                    "insight": industry.get("insight", ""),
+                    "examplePaths": industry.get("career_path", []),
+                    "education": industry.get("education", "")
+                })
+            
+            # Return the formatted result
+            return {
+                "personality": personality,
+                "industries": industries
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing survey: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=f"Error processing survey: {str(e)}")
+        
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add a test endpoint to verify API functionality
+@app.get("/api/survey/test")
+async def test_survey_api():
+    """Test endpoint to verify API connectivity"""
+    logger.info("Test survey API endpoint called")
+    return {"status": "ok", "message": "Survey API is working"}
 
 if __name__ == "__main__":
     import uvicorn
