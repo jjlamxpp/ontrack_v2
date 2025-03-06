@@ -119,12 +119,25 @@ export function SurveyPage() {
 
       setLoading(true);
       console.log('Submitting survey answers...');
-      const result = await submitSurveyAndGetAnalysis(answers);
-      console.log('Survey submitted successfully, received analysis result');
       
+      // Clear any previous errors
+      setError(null);
+      
+      const result = await submitSurveyAndGetAnalysis(answers);
+      console.log('Survey submitted successfully, received analysis result:', result);
+      
+      // Validate the result structure
+      if (!result.personality || !result.industries) {
+        throw new Error('Invalid result structure received from API');
+      }
+      
+      // Store the result in localStorage
       localStorage.setItem('analysisResult', JSON.stringify(result));
+      
       // Clear survey answers after successful submission
       localStorage.removeItem('surveyAnswers');
+      
+      // Navigate to result page
       navigate('/result');
     } catch (err) {
       console.error('Submission error:', err);
