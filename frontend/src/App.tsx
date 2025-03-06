@@ -64,10 +64,36 @@ function App() {
 }
 
 function RequireAnalysis({ children }: { children: React.ReactNode }) {
-  const result = localStorage.getItem('analysisResult');
-  if (!result) {
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+  
+  useEffect(() => {
+    const result = localStorage.getItem('analysisResult');
+    if (!result) {
+      setIsValid(false);
+      return;
+    }
+    
+    try {
+      const parsed = JSON.parse(result);
+      // Validate the result structure
+      setIsValid(!!parsed.personality && !!parsed.industries);
+    } catch (e) {
+      console.error('Error parsing analysis result:', e);
+      setIsValid(false);
+    }
+  }, []);
+  
+  if (isValid === null) {
+    // Still checking
+    return <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
+      <div className="text-xl">Loading...</div>
+    </div>;
+  }
+  
+  if (!isValid) {
     return <Navigate to="/" replace />;
   }
+  
   return <>{children}</>;
 }
 
