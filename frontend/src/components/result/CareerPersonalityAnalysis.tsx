@@ -9,32 +9,49 @@ interface Props {
 
 export function CareerPersonalityAnalysis({ analysis }: Props) {
   const [iconUrl, setIconUrl] = useState<string>('');
+  const [iconError, setIconError] = useState(false);
   
   useEffect(() => {
+    // Reset error state when iconId changes
+    setIconError(false);
+    
     if (analysis?.iconId) {
-      // Use a relative URL path
-      fetch(`/api/survey/icon/${analysis.iconId}`)
-        .then(response => {
-          if (!response.ok) {
-            console.error(`Failed to load icon: ${response.status} ${response.statusText}`);
-            throw new Error('Failed to load icon');
-          }
-          return response.blob();
-        })
-        .then(blob => {
-          const url = URL.createObjectURL(blob);
-          setIconUrl(url);
-        })
-        .catch(error => {
-          console.error('Error loading icon:', error);
-          // Use a fallback icon that we know exists
-          setIconUrl('/fallback-icon.png');
-        });
+      // Try to load the icon with a direct path first
+      const iconPath = `/static/icon/${analysis.iconId}.png`;
+      
+      // Create a new image to test if the icon exists
+      const img = new Image();
+      img.onload = () => {
+        setIconUrl(iconPath);
+      };
+      img.onerror = () => {
+        // If direct path fails, try the API endpoint
+        fetch(`/api/survey/icon/${analysis.iconId}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Failed to load icon');
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            const url = URL.createObjectURL(blob);
+            setIconUrl(url);
+          })
+          .catch(error => {
+            console.error('Error loading icon:', error);
+            setIconError(true);
+            // Use a fallback icon
+            setIconUrl('/static/icon/default.png');
+          });
+      };
+      img.src = iconPath;
     }
     
     // Cleanup
     return () => {
-      if (iconUrl) URL.revokeObjectURL(iconUrl);
+      if (iconUrl && iconUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(iconUrl);
+      }
     };
   }, [analysis?.iconId]);
 
@@ -61,7 +78,16 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
         <CardContent className="p-0">
           <div className="grid md:grid-cols-2">
             <div className="flex flex-col items-center justify-center p-8 h-[400px]">
-              {iconUrl ? (
+              {iconError ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <p className="text-gray-500 mb-2">Icon not available</p>
+                    <div className="w-32 h-32 bg-gray-200 rounded-full mx-auto flex items-center justify-center">
+                      <span className="text-4xl">🧑</span>
+                    </div>
+                  </div>
+                </div>
+              ) : iconUrl ? (
                 <div className="relative w-full h-full">
                   <img
                     src={iconUrl}
@@ -69,8 +95,9 @@ export function CareerPersonalityAnalysis({ analysis }: Props) {
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       console.error('Image failed to load, using fallback');
+                      setIconError(true);
                       const target = e.target as HTMLImageElement;
-                      target.src = '/fallback-icon.png';
+                      target.src = '/static/icon/default.png';
                     }}
                   />
                 </div>
