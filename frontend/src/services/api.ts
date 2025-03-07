@@ -30,10 +30,10 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        console.log('Submitting survey to:', `${API_BASE_URL}/submit`);
+        console.log('Submitting survey to:', `${API_BASE_URL}/survey/submit`);
         console.log('Answers being submitted:', answers);
         
-        const response = await fetch(`${API_BASE_URL}/submit`, {
+        const response = await fetch(`${API_BASE_URL}/survey/submit`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
