@@ -520,6 +520,11 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
         logger.info(f"Processing survey with {len(survey_data.answers)} answers")
         logger.info(f"Survey answers: {survey_data.answers}")
         
+        # Validate the answers
+        if not survey_data.answers or len(survey_data.answers) < 10:
+            logger.error(f"Invalid survey data: not enough answers ({len(survey_data.answers)})")
+            raise HTTPException(status_code=400, detail="Not enough answers provided")
+        
         # Initialize the database
         try:
             # Try to find the Excel file in different possible locations
@@ -527,8 +532,13 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 BASE_DIR / "app" / "database" / "Database.xlsx",
                 BASE_DIR / "Database.xlsx",
                 Path("/app/app/database/Database.xlsx"),
-                Path("app/database/Database.xlsx")  # Relative path
+                Path("app/database/Database.xlsx"),  # Relative path
+                Path("./app/database/Database.xlsx"),  # Another relative path
+                Path("/app/database/Database.xlsx")  # Direct path in container
             ]
+            
+            # Log the current working directory
+            logger.info(f"Current working directory: {os.getcwd()}")
             
             db = None
             for path in possible_paths:
@@ -552,16 +562,28 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 if database_dir.exists():
                     logger.error(f"Files in {database_dir}: {list(database_dir.glob('*'))}")
                 
+                # Try to list files in other possible locations
+                logger.error(f"Files in current directory: {list(Path('.').glob('*'))}")
+                logger.error(f"Files in app directory: {list(Path('app').glob('*')) if Path('app').exists() else 'app directory not found'}")
+                
                 logger.error("Could not find Database.xlsx in any expected location")
                 raise HTTPException(status_code=500, detail="Database file not found")
             
             # Process the survey answers
             logger.info("Processing survey answers with database")
-            result = db.process_basic_results(survey_data.answers)
-            logger.info(f"Processed survey results: {result.keys()}")
+            try:
+                result = db.process_basic_results(survey_data.answers)
+                logger.info(f"Processed survey results: {result.keys()}")
+            except Exception as process_err:
+                logger.error(f"Error processing survey results: {str(process_err)}")
+                logger.error(traceback.format_exc())
+                raise HTTPException(status_code=500, detail=f"Error processing survey results: {str(process_err)}")
             
             # Extract personality type information
             personality_type = result.get("personality_type", {})
+            if not personality_type:
+                logger.warning("No personality type found in results")
+                personality_type = {}
             
             # Format the personality analysis
             personality = {
@@ -596,11 +618,17 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
             logger.info(f"Returning analysis result with {len(industries)} industries")
             return analysis_result
             
+        except HTTPException:
+            # Re-raise HTTP exceptions
+            raise
         except Exception as e:
             logger.error(f"Error processing survey: {str(e)}")
             logger.error(traceback.format_exc())
             raise HTTPException(status_code=500, detail=f"Error processing survey: {str(e)}")
         
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
         logger.error(traceback.format_exc())
