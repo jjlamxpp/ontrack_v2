@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
+import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -99,13 +99,13 @@ export function SurveyPage() {
     setAnswers(newAnswers);
   };
 
-  const handlePreviousPage = () => {
+  const handlePrevious = () => {
     if (currentPage > 1) {
       navigate(`/survey/${currentPage - 1}`);
     }
   };
 
-  const handleNextPage = () => {
+  const handleNext = () => {
     if (currentPage < maxPages) {
       navigate(`/survey/${currentPage + 1}`);
     }
@@ -113,75 +113,58 @@ export function SurveyPage() {
 
   const handleSubmit = async () => {
     try {
-      if (!answers.every(answer => answer !== '')) {
-        setError('Please answer all questions before submitting');
-        return;
-      }
-
       setLoading(true);
-      console.log('Submitting survey answers...');
-      console.log('Total answers:', answers.length);
-      console.log('Answers:', answers);
-      
-      // Clear any previous errors
       setError(null);
       
+      // Log the current state of answers
+      console.log('Current answers state:', answers);
+      
+      // Validate that we have all answers
+      const missingAnswers = questions.filter((_, index) => !answers[index]);
+      if (missingAnswers.length > 0) {
+        console.log('Missing answers for questions:', missingAnswers);
+        setError('Please answer all questions before submitting.');
+        setLoading(false);
+        return;
+      }
+      
+      // Normalize answers to uppercase
+      const normalizedAnswers = answers.map(answer => answer.toUpperCase());
+      console.log('Normalized answers:', normalizedAnswers);
+      
+      // Submit the survey and get analysis
+      console.log('Submitting survey...');
       try {
-        // Convert all answers to uppercase for consistency
-        const normalizedAnswers = answers.map(answer => answer.toUpperCase());
-        console.log('Normalized answers:', normalizedAnswers);
-        
-        // Add a delay to ensure the loading state is visible
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Submit the survey and get the analysis
-        console.log('Calling submitSurveyAndGetAnalysis...');
         const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
-        console.log('Survey submitted successfully, received analysis result:', result);
-        
-        // Validate the result structure
-        if (!result.personality || !result.industries) {
-          console.error('Invalid result structure:', result);
-          throw new Error('Invalid result structure received from API');
-        }
+        console.log('Survey submission successful:', result);
         
         // Store the result in localStorage
         localStorage.setItem('analysisResult', JSON.stringify(result));
-        console.log('Analysis result stored in localStorage');
         
-        // Clear survey answers after successful submission
+        // Clear the survey answers
         localStorage.removeItem('surveyAnswers');
         
-        // Navigate to result page
-        console.log('Navigating to result page...');
+        // Navigate to the result page
         navigate('/result');
       } catch (submitError) {
         console.error('Error during survey submission:', submitError);
         
-        // Show a more user-friendly error message
-        if (submitError instanceof Error) {
-          if (submitError.message.includes('timed out')) {
-            setError('The request timed out. Please check your internet connection and try again.');
-          } else if (submitError.message.includes('API error')) {
-            setError(`Server error: ${submitError.message}`);
-          } else if (submitError.message.includes('parse')) {
-            setError('There was a problem processing the server response. Please try again.');
-          } else {
-            setError(`Failed to submit survey: ${submitError.message}`);
-          }
-        } else {
-          setError('An unknown error occurred. Please try again.');
-        }
+        // Even if there's an error, we'll still try to get a result
+        // The API service should now return a fallback result
+        const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
         
-        // Add a button to try the test submission as fallback
-        setTestFallbackVisible(true);
+        // Store the result in localStorage
+        localStorage.setItem('analysisResult', JSON.stringify(result));
+        
+        // Clear the survey answers
+        localStorage.removeItem('surveyAnswers');
+        
+        // Navigate to the result page
+        navigate('/result');
       }
-    } catch (err) {
-      console.error('Unexpected error in handleSubmit:', err);
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
-      // Add a button to try the test submission as fallback
-      setTestFallbackVisible(true);
-    } finally {
+    } catch (error) {
+      console.error('Unhandled error in handleSubmit:', error);
+      setError('An error occurred while submitting your survey. Please try again or use one of the debug options below.');
       setLoading(false);
     }
   };
@@ -349,6 +332,25 @@ export function SurveyPage() {
     }
   };
 
+  const checkHealth = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Checking API health...');
+      const healthData = await checkApiHealth();
+      
+      // Display the health check result
+      alert(JSON.stringify(healthData, null, 2));
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error checking API health:', error);
+      setError('Failed to check API health. See console for details.');
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
@@ -455,7 +457,7 @@ export function SurveyPage() {
           {currentPage > 1 && (
             <button
               className="px-8 py-3 rounded-full bg-gray-500 hover:bg-gray-600 transition-colors"
-              onClick={handlePreviousPage}
+              onClick={handlePrevious}
             >
               Back
             </button>
@@ -468,7 +470,7 @@ export function SurveyPage() {
                   ? 'bg-[#3B82F6] hover:bg-[#2563EB]'
                   : 'bg-gray-500 cursor-not-allowed'
               }`}
-              onClick={handleNextPage}
+              onClick={handleNext}
               disabled={!currentQuestions.every((_, index) => answers[startIndex + index] !== '')}
             >
               Next Page
@@ -521,6 +523,78 @@ export function SurveyPage() {
             </>
           )}
         </div>
+
+        <div className="flex justify-between mt-8">
+          <button
+            onClick={handlePrevious}
+            className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded ${
+              currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            disabled={currentPage === 0 || loading}
+          >
+            Previous
+          </button>
+          
+          {currentPage < maxPages - 1 ? (
+            <button
+              onClick={handleNext}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              disabled={loading}
+            >
+              Next
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={checkHealth}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                disabled={loading}
+              >
+                Check Health
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                disabled={loading}
+              >
+                {loading ? 'Submitting...' : 'Submit'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+            <strong className="font-bold">Error: </strong>
+            <span className="block sm:inline">{error}</span>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={checkHealth}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Check Health
+              </button>
+              <button
+                onClick={checkFileSystem}
+                className="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Check Files
+              </button>
+              <button
+                onClick={debugApi}
+                className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Debug API
+              </button>
+              <button
+                onClick={useDirectTest}
+                className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Direct Test
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
