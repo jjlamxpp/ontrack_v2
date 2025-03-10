@@ -11,10 +11,13 @@ export const ApiContext = createContext({
 });
 
 function App() {
-  // Set up API configuration - use window.location to determine the base URL
+  // Set up API configuration - use environment variables with fallback
   const [apiConfig] = useState(() => {
-    // Always use relative URL for API
-    const apiBaseUrl = '/api';
+    // Use environment variable if available, otherwise use the Digital Ocean URL
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://ontrack-d4m7j.ondigitalocean.app/api';
+    
+    console.log('API URL from environment:', import.meta.env.VITE_API_URL);
+    console.log('Using API base URL:', apiBaseUrl);
     
     // Set global variable for other components
     window.__API_BASE_URL = apiBaseUrl;
@@ -28,15 +31,15 @@ function App() {
     console.log('Path:', window.location.pathname);
     console.log('Storage has analysis result:', !!localStorage.getItem('analysisResult'));
     
-    // Log API configuration
-    console.log('Using API base URL:', apiConfig.apiBaseUrl);
-    
     // Handle page refresh - check if we're on a "not found" page
     // This helps recover from 404 errors when refreshing non-root routes
     const isNotFoundPage = document.body.textContent?.trim().toLowerCase() === 'not found';
     if (isNotFoundPage) {
       console.log('Detected "Not Found" page, redirecting to home');
-      window.location.href = '/';
+      // Use history API to replace the current URL without a full page reload
+      window.history.replaceState(null, '', '/');
+      // Force a reload to ensure the app is properly initialized
+      window.location.reload();
     }
   }, [apiConfig.apiBaseUrl]);
 
@@ -56,6 +59,8 @@ function App() {
           />
           {/* Add debug route */}
           <Route path="/debug" element={<DebugScreen />} />
+          {/* Add explicit routes for all main paths to ensure they work on refresh */}
+          <Route path="/survey/*" element={<Navigate to="/survey/1" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
