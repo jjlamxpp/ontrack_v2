@@ -128,8 +128,17 @@ export function SurveyPage() {
         return;
       }
       
+      // Ensure all answers are valid strings
+      const validatedAnswers = answers.map(answer => {
+        if (!answer || typeof answer !== 'string') {
+          console.warn('Invalid answer found:', answer);
+          return 'NO'; // Default to 'NO' for invalid answers
+        }
+        return answer;
+      });
+      
       // Normalize answers to uppercase
-      const normalizedAnswers = answers.map(answer => answer.toUpperCase());
+      const normalizedAnswers = validatedAnswers.map(answer => answer.toUpperCase());
       console.log('Normalized answers:', normalizedAnswers);
       
       // Submit the survey and get analysis
