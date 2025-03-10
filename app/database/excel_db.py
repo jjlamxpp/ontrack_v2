@@ -1,713 +1,680 @@
+import os
+import logging
 import pandas as pd
-from pathlib import Path
-from itertools import permutations
-from typing import List, Dict
 import numpy as np
+from typing import List, Dict, Any, Optional, Union
+import re
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class SurveyDatabase:
-    def __init__(self, excel_path: str = '/app/database/Database.xlsx'):
-        self.excel_path = Path(excel_path)
-        if not self.excel_path.exists():
+    """Class to handle survey data processing using Excel database."""
+    
+    def __init__(self, excel_path: str = "/app/database/Database.xlsx"):
+        """
+        Initialize the database with the Excel file.
+        
+        Args:
+            excel_path: Path to the Excel database file
+        """
+        self.excel_path = excel_path
+        logger.info(f"Initializing SurveyDatabase with path: {excel_path}")
+        
+        # Check if the file exists
+        if not os.path.exists(excel_path):
+            logger.error(f"Excel file not found at {excel_path}")
+            # Try to list files in the directory to help debug
+            try:
+                parent_dir = os.path.dirname(excel_path)
+                if os.path.exists(parent_dir):
+                    logger.info(f"Files in {parent_dir}: {os.listdir(parent_dir)}")
+                else:
+                    logger.error(f"Parent directory {parent_dir} does not exist")
+            except Exception as e:
+                logger.error(f"Error listing directory contents: {str(e)}")
+            
             raise FileNotFoundError(f"Excel file not found at {excel_path}")
         
         try:
-            print(f"Loading Excel file from {excel_path}")
+            # Load the Excel file with different possible sheet names
+            logger.info(f"Loading Excel file from {excel_path}")
             
-            # Read all required sheets with error handling
-            try:
-                self.df = pd.read_excel(
-                    self.excel_path, 
-                    sheet_name="Question pool",
-                    engine='openpyxl'
-                )
-                print(f"Successfully loaded Question pool sheet with {len(self.df)} rows")
-                print(f"Question pool columns: {self.df.columns.tolist()}")
-            except Exception as e:
-                print(f"Error loading Question pool sheet: {str(e)}")
-                self.df = pd.DataFrame()  # Empty DataFrame as fallback
+            # Get all sheet names in the Excel file
+            all_sheets = pd.ExcelFile(excel_path).sheet_names
+            logger.info(f"Available sheets in Excel file: {all_sheets}")
             
-            try:
-                self.two_digit_df = pd.read_excel(
-                    self.excel_path, 
-                    sheet_name="Two digit",
-                    engine='openpyxl'
-                )
-                print(f"Successfully loaded Two digit sheet with {len(self.two_digit_df)} rows")
-                print(f"Two digit columns: {self.two_digit_df.columns.tolist()}")
-            except Exception as e:
-                print(f"Error loading Two digit sheet: {str(e)}")
-                self.two_digit_df = pd.DataFrame()  # Empty DataFrame as fallback
-            
-            try:
-                self.industry_df = pd.read_excel(
-                    self.excel_path, 
-                    sheet_name="Industry Insight",
-                    engine='openpyxl'
-                )
-                print(f"Successfully loaded Industry Insight sheet with {len(self.industry_df)} rows")
-                print(f"Industry Insight columns: {self.industry_df.columns.tolist()}")
-            except Exception as e:
-                print(f"Error loading Industry Insight sheet: {str(e)}")
-                self.industry_df = pd.DataFrame()  # Empty DataFrame as fallback
-            
-            # Check if any of the DataFrames are empty
-            if self.df.empty:
-                print("Warning: Question pool DataFrame is empty")
-            if self.two_digit_df.empty:
-                print("Warning: Two digit DataFrame is empty")
-            if self.industry_df.empty:
-                print("Warning: Industry Insight DataFrame is empty")
-            
-            # Instead of raising errors for missing columns, just log warnings
-            # Check Industry sheet with detailed error message
-            required_industry_types = {
-                'mapping': ['Three digital', 'Three Digital', 'Mapping Code', 'Matching code'],
-                'industry': ['Industry', 'industry'],
-                'overview': ['Overview', 'overview', 'Description', 'description'],
-                'trending': ['Trending', 'trending'],
-                'insight': ['Insight', 'insight'],
-                'skills': ['Required Skills', 'Required Skill', 'required skills'],
-                'role': ['Example Role', 'Example role', 'example role', 'Career path'],
-                'jupas': ['Jupas', 'JUPAS', 'jupas', 'Education', 'education']
-            }
-            
-            missing_industry_types = []
-            for col_type, variants in required_industry_types.items():
-                if not any(variant in self.industry_df.columns for variant in variants):
-                    missing_industry_types.append(col_type)
-            
-            if missing_industry_types:
-                print(f"Warning: Missing Industry column types: {missing_industry_types}")
-                print("Available Industry columns:", list(self.industry_df.columns))
-            
-            # Define required columns with variations
-            required_columns = {
-                'Question pool': ['questions:', 'Questions', 'questions', 'category', 'Category'],
-                'Two digit': [
-                    'Two digit code', 'Two Digit Code', 'Two-digit code',
-                    'Role', 'role',
-                    'icon_id', 'Icon ID', 'Icon id',
-                    'Who you are?', 'Who You Are', 'Who you are',
-                    'How This Combination Interpret', 'How This Combination Interprets',
-                    'What You Might Enjoy', 'What you might enjoy',
-                    'Your strength', 'Your Strength', 'Your strengths'
-                ],
-                'Industry': [
-                    'Matching code', 'Three digital', 'Three Digital', 'Mapping Code',
-                    'Industry', 'industry',
-                    'Description', 'description', 'Overview', 'overview',
-                    'Trending', 'trending',
-                    'Insight', 'insight',
-                    'Career path', 'Example Role', 'Example role',
-                    'Education', 'education', 'Jupas', 'JUPAS'
-                ]
-            }
-            
-            # Check Question pool sheet - just log warnings
-            missing_question_cols = []
-            for col in ['questions:', 'Questions', 'questions']:
-                if col in self.df.columns:
+            # Try different possible sheet names for questions
+            question_sheet_names = ["Questions", "Question pool", "Survey Questions"]
+            self.df_questions = None
+            for sheet_name in question_sheet_names:
+                if sheet_name in all_sheets:
+                    logger.info(f"Loading questions from sheet: {sheet_name}")
+                    self.df_questions = pd.read_excel(excel_path, sheet_name=sheet_name)
                     break
-            else:
-                missing_question_cols.append('questions')
             
-            for col in ['category', 'Category']:
-                if col in self.df.columns:
+            if self.df_questions is None:
+                logger.error("Could not find a valid questions sheet")
+                raise ValueError("No valid questions sheet found in Excel file")
+            
+            # Try different possible sheet names for personality
+            personality_sheet_names = ["Personality", "Two digit", "Two Digit", "Personality Types"]
+            self.df_personality = None
+            for sheet_name in personality_sheet_names:
+                if sheet_name in all_sheets:
+                    logger.info(f"Loading personality data from sheet: {sheet_name}")
+                    self.df_personality = pd.read_excel(excel_path, sheet_name=sheet_name)
                     break
-            else:
-                missing_question_cols.append('category')
             
-            if missing_question_cols:
-                print(f"Warning: Missing required columns in Question pool sheet: {missing_question_cols}")
-                print("Available Question pool columns:", list(self.df.columns))
+            if self.df_personality is None:
+                logger.error("Could not find a valid personality sheet")
+                raise ValueError("No valid personality sheet found in Excel file")
             
-            # Check Two digit sheet - just log warnings
-            missing_two_digit_cols = []
-            for col_group in [
-                ['Two digit code', 'Two Digit Code', 'Two-digit code'],
-                ['Role', 'role'],
-                ['icon_id', 'Icon ID', 'Icon id'],
-                ['Who you are?', 'Who You Are', 'Who you are'],
-                ['How This Combination Interpret', 'How This Combination Interprets'],
-                ['What You Might Enjoy', 'What you might enjoy'],
-                ['Your strength', 'Your Strength', 'Your strengths']
-            ]:
-                if not any(col in self.two_digit_df.columns for col in col_group):
-                    missing_two_digit_cols.append(col_group[0])
+            # Try different possible sheet names for industries
+            industry_sheet_names = ["Industries", "Industry Insight", "Industry", "Career"]
+            self.df_industries = None
+            for sheet_name in industry_sheet_names:
+                if sheet_name in all_sheets:
+                    logger.info(f"Loading industry data from sheet: {sheet_name}")
+                    self.df_industries = pd.read_excel(excel_path, sheet_name=sheet_name)
+                    break
             
-            if missing_two_digit_cols:
-                print(f"Warning: Missing required columns in Two digit sheet: {missing_two_digit_cols}")
-                print("Available Two digit columns:", list(self.two_digit_df.columns))
+            if self.df_industries is None:
+                logger.error("Could not find a valid industries sheet")
+                raise ValueError("No valid industries sheet found in Excel file")
             
-            # Check Industry sheet - just log warnings
-            missing_industry_cols = []
-            for col_group in [
-                ['Matching code', 'Three digital', 'Three Digital', 'Mapping Code'],
-                ['Industry', 'industry'],
-                ['Description', 'description', 'Overview', 'overview'],
-                ['Trending', 'trending'],
-                ['Insight', 'insight'],
-                ['Career path', 'Example Role', 'Example role'],
-                ['Education', 'education', 'Jupas', 'JUPAS']
-            ]:
-                if not any(col in self.industry_df.columns for col in col_group):
-                    missing_industry_cols.append(col_group[0])
+            logger.info("Excel file loaded successfully")
             
-            if missing_industry_cols:
-                print(f"Warning: Missing required columns in Industry sheet: {missing_industry_cols}")
-                print("Available Industry columns:", list(self.industry_df.columns))
+            # Log some basic info about the loaded data
+            logger.info(f"Loaded {len(self.df_questions)} questions")
+            logger.info(f"Loaded {len(self.df_personality)} personality types")
+            logger.info(f"Loaded {len(self.df_industries)} industries")
+            
+            # Log column names to help with debugging
+            logger.info(f"Questions sheet columns: {list(self.df_questions.columns)}")
+            logger.info(f"Personality sheet columns: {list(self.df_personality.columns)}")
+            logger.info(f"Industries sheet columns: {list(self.df_industries.columns)}")
             
         except Exception as e:
-            print(f"Error reading Excel file: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            # Initialize empty DataFrames as fallback
-            self.df = pd.DataFrame()
-            self.two_digit_df = pd.DataFrame()
-            self.industry_df = pd.DataFrame()
-
-    def get_all_questions(self):
-        """Get all questions from the database"""
+            logger.error(f"Error loading Excel file: {str(e)}")
+            logger.exception("Exception details:")
+            raise
+    
+    def process_survey(self, answers: List[str]) -> Dict[str, Any]:
+        """
+        Process survey answers and return personality analysis.
+        
+        Args:
+            answers: List of survey answers (A, B, C, etc.)
+            
+        Returns:
+            Dictionary with personality analysis and matching industries
+        """
         try:
+            logger.info(f"Processing survey with {len(answers)} answers")
+            
+            # Validate answers
+            if not answers:
+                logger.error("No answers provided")
+                raise ValueError("No answers provided")
+            
+            # Normalize answers to uppercase
+            answers = [a.upper() if isinstance(a, str) else a for a in answers]
+            logger.info(f"Normalized answers: {answers}")
+            
+            # Check if we should use the ontrack_zh approach (yes/no answers)
+            if all(a in ['YES', 'NO', 'Yes', 'No', 'yes', 'no'] for a in answers if isinstance(a, str)):
+                logger.info("Using yes/no answer processing approach")
+                return self._process_yes_no_survey(answers)
+            
+            # Calculate RIASEC scores
+            riasec_scores = self._calculate_riasec_scores(answers)
+            logger.info(f"Calculated RIASEC scores: {riasec_scores}")
+            
+            # Get top personality types
+            personality_type = self._get_personality_type(riasec_scores)
+            logger.info(f"Determined personality type: {personality_type}")
+            
+            # Get matching industries
+            matching_industries = self._get_matching_industries(personality_type)
+            logger.info(f"Found {len(matching_industries)} matching industries")
+            
+            # Return the result
+            return {
+                "personality": personality_type,
+                "industries": matching_industries
+            }
+        except Exception as e:
+            logger.error(f"Error processing survey: {str(e)}")
+            logger.exception("Exception details:")
+            raise
+    
+    def _process_yes_no_survey(self, answers: List[str]) -> Dict[str, Any]:
+        """
+        Process survey with yes/no answers (similar to ontrack_zh approach).
+        
+        Args:
+            answers: List of survey answers (YES, NO, etc.)
+            
+        Returns:
+            Dictionary with personality analysis and matching industries
+        """
+        try:
+            # Initialize counters for each Holland code category
+            category_counts = {
+                'R': 0, 'I': 0, 'A': 0, 
+                'S': 0, 'E': 0, 'C': 0
+            }
+            
+            # Get questions with their categories
             questions = []
-            
-            # Check if the DataFrame is loaded
-            if self.df is None or self.df.empty:
-                print("Warning: Question pool DataFrame is empty or None")
-                return []
-            
-            # Log the columns in the DataFrame
-            print(f"Question pool columns: {self.df.columns.tolist()}")
-            
-            # Check if required columns exist
-            if 'questions:' not in self.df.columns:
-                print("Warning: 'questions:' column not found in DataFrame")
-                # Try to find a similar column
-                question_cols = [col for col in self.df.columns if 'question' in col.lower()]
-                if question_cols:
-                    print(f"Found alternative question column: {question_cols[0]}")
-                    question_col = question_cols[0]
-                else:
-                    print("No question column found")
-                    return []
-            else:
-                question_col = 'questions:'
-            
-            # Check if category column exists
-            if 'category' not in self.df.columns:
-                print("Warning: 'category' column not found in DataFrame")
-                # Try to find a similar column
-                category_cols = [col for col in self.df.columns if 'category' in col.lower() or 'type' in col.lower()]
-                if category_cols:
-                    print(f"Found alternative category column: {category_cols[0]}")
-                    category_col = category_cols[0]
-                else:
-                    print("No category column found, using default category")
-                    category_col = None
-            else:
-                category_col = 'category'
-            
-            # Process each row in the DataFrame
-            for index, row in self.df.iterrows():
-                question_text = row.get(question_col, '')
+            for idx, row in self.df_questions.iterrows():
+                # Try different possible column names for question text
+                question_text = None
+                for col in ['question_text', 'questions:', 'Question', 'questions', 'Questions']:
+                    if col in self.df_questions.columns:
+                        question_text = row[col]
+                        break
                 
-                # Skip empty questions
-                if not question_text or pd.isna(question_text):
-                    continue
+                # Try different possible column names for category
+                category = None
+                for col in ['category', 'Category', 'holland_code', 'Holland Code', 'type']:
+                    if col in self.df_questions.columns:
+                        category = row[col]
+                        break
                 
-                # Parse the question text
-                if isinstance(question_text, str):
-                    # Try to extract the actual question text
-                    import re
-                    match = re.search(r'"([^"]*)"', question_text)
-                    if match:
-                        question_text = match.group(1)
-                    else:
-                        # Try with single quotes if double quotes not found
-                        match = re.search(r"'([^']*)'", question_text)
-                        if match:
-                            question_text = match.group(1)
-                        else:
-                            # If no quotes found, try to extract after "question:"
-                            parts = question_text.split("question:")
-                            if len(parts) > 1:
-                                question_text = parts[1].strip().strip('"').strip("'")
-                
-                # Get category
-                category = row.get(category_col, 'general') if category_col else 'general'
-                if pd.isna(category):
-                    category = 'general'
-                
-                # Create question object
-                question = {
-                    "id": int(index + 1),  # Use row index + 1 as ID
-                    "question_text": question_text,
-                    "category": category,
-                    "options": ["Yes", "No"]
-                }
-                
-                questions.append(question)
+                if question_text and category:
+                    questions.append({
+                        'id': idx,
+                        'question_text': question_text,
+                        'category': category
+                    })
             
-            print(f"Loaded {len(questions)} questions from database")
-            return questions
+            # Count answers for each category from the survey
+            for q_idx, answer in enumerate(answers):
+                if q_idx < len(questions) and answer.upper() in ['YES', 'Y']:
+                    category = questions[q_idx]['category']
+                    if category in category_counts:
+                        category_counts[category] += 1
             
+            logger.info(f"Category counts: {category_counts}")
+            
+            # Find categories with maximum scores
+            max_score = max(category_counts.values())
+            max_cats = [cat for cat, count in category_counts.items() if count == max_score]
+            
+            # Find categories with second highest scores
+            second_score = 0
+            second_cats = []
+            remaining_scores = [count for count in category_counts.values() if count < max_score]
+            if remaining_scores:
+                second_score = max(remaining_scores)
+                second_cats = [cat for cat, count in category_counts.items() if count == second_score]
+            
+            # Find categories with third highest scores
+            third_score = 0
+            third_cats = []
+            remaining_scores = [count for count in category_counts.values() if count < second_score]
+            if remaining_scores:
+                third_score = max(remaining_scores)
+                third_cats = [cat for cat, count in category_counts.items() if count == third_score]
+            
+            # Generate two-digit code
+            two_digit_code = ''.join(max_cats[:2]) if len(max_cats) >= 2 else (max_cats[0] + second_cats[0] if second_cats else max_cats[0] + 'X')
+            
+            # Get personality type based on two-digit code
+            personality_type = self._get_personality_type_by_code(two_digit_code)
+            
+            # Calculate normalized RIASEC scores
+            total_score = sum(category_counts.values())
+            normalized_scores = {
+                cat: count / max(1, max_score)  # Avoid division by zero
+                for cat, count in category_counts.items()
+            }
+            
+            # Add normalized scores to personality type
+            personality_type['riasecScores'] = normalized_scores
+            
+            # Get matching industries
+            matching_industries = self._get_matching_industries(personality_type)
+            
+            # Return the result
+            return {
+                "personality": personality_type,
+                "industries": matching_industries
+            }
         except Exception as e:
-            print(f"Error in get_all_questions: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return []
-
-    def _get_two_digit_mapping(self, two_digit_code: str) -> Dict:
-        """Get the mapping for a two-digit code"""
-        try:
-            print(f"Looking up two-digit code: {two_digit_code}")
+            logger.error(f"Error processing yes/no survey: {str(e)}")
+            logger.exception("Exception details:")
+            raise
+    
+    def _get_personality_type_by_code(self, code: str) -> Dict[str, Any]:
+        """
+        Get personality type information based on a two-digit code.
+        
+        Args:
+            code: Two-digit Holland code (e.g., 'RI', 'SE', etc.)
             
-            # Ensure we have a valid code
-            if not two_digit_code or len(two_digit_code) != 2:
-                print(f"Warning: Invalid two-digit code: {two_digit_code}")
+        Returns:
+            Dictionary with personality type information
+        """
+        try:
+            # Try different possible column names for the code
+            code_column = None
+            for col in ['code', 'Code', 'Two digit code', 'Two Digit Code', 'Two-digit code', 'holland_code']:
+                if col in self.df_personality.columns:
+                    code_column = col
+                    break
+            
+            if not code_column:
+                logger.error("Could not find code column in personality dataframe")
                 return self._get_default_personality()
             
-            # Try to find the exact code
-            for _, row in self.two_digit_df.iterrows():
-                # Get the code from the row, handling different column names
-                code = None
-                for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
-                    if col_name in self.two_digit_df.columns:
-                        code = row.get(col_name)
-                        if code:
-                            break
-                
-                if not code:
-                    continue
-                
-                # Normalize the code for comparison
-                if isinstance(code, str) and code.strip() == two_digit_code:
-                    print(f"Found exact match for code: {two_digit_code}")
-                    return self._extract_personality_from_row(row)
+            # Find the row with the matching code
+            matching_rows = self.df_personality[self.df_personality[code_column].str.upper() == code.upper()]
             
-            # If no exact match, try to find a code with the same characters in any order
-            for _, row in self.two_digit_df.iterrows():
-                code = None
-                for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
-                    if col_name in self.two_digit_df.columns:
-                        code = row.get(col_name)
-                        if code:
-                            break
-                
-                if not code:
-                    continue
-                
-                # Check if the code contains the same characters (in any order)
-                if isinstance(code, str) and sorted(code.strip()) == sorted(two_digit_code):
-                    print(f"Found match with same characters for code: {two_digit_code}")
-                    return self._extract_personality_from_row(row)
+            if matching_rows.empty:
+                logger.warning(f"No personality type found for code: {code}")
+                return self._get_default_personality()
             
-            # If still no match, return a default personality
-            print(f"No match found for code: {two_digit_code}, using default")
-            return self._get_default_personality()
+            # Get the first matching row
+            row = matching_rows.iloc[0]
             
-        except Exception as e:
-            print(f"Error in _get_two_digit_mapping: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return self._get_default_personality()
-    
-    def _extract_personality_from_row(self, row) -> Dict:
-        """Extract personality information from a row in the two_digit_df"""
-        try:
-            # Initialize with default values
-            personality = {
-                "code": "XX",
-                "role": "Default Role",
-                "who_you_are": "Default description",
-                "how_this_combination": "Default interpretation",
-                "what_you_might_enjoy": [],
-                "your_strength": [],
-                "icon_id": "1"
-            }
+            # Try different possible column names for each field
+            personality = {}
             
-            # Try to extract the code
-            for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    personality["code"] = str(row.get(col_name)).strip()
+            # Type/Role
+            for col in ['type', 'Type', 'role', 'Role']:
+                if col in self.df_personality.columns:
+                    personality['type'] = row[col]
                     break
+            if 'type' not in personality:
+                personality['type'] = f"Holland Code: {code}"
             
-            # Try to extract the role
-            for col_name in ['Role', 'role']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    personality["role"] = str(row.get(col_name))
+            # Description
+            for col in ['description', 'Description', 'who_you_are', 'Who you are', 'Who You Are']:
+                if col in self.df_personality.columns:
+                    personality['description'] = row[col]
                     break
+            if 'description' not in personality:
+                personality['description'] = "No description available"
             
-            # Try to extract the icon ID
-            for col_name in ['icon_id', 'Icon ID', 'Icon id']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    personality["icon_id"] = str(row.get(col_name))
+            # Interpretation
+            for col in ['interpretation', 'Interpretation', 'how_this_combination', 'How This Combination Interpret']:
+                if col in self.df_personality.columns:
+                    personality['interpretation'] = row[col]
                     break
+            if 'interpretation' not in personality:
+                personality['interpretation'] = "No interpretation available"
             
-            # Try to extract the description
-            for col_name in ['Who you are?', 'Who You Are', 'Who you are']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    personality["who_you_are"] = str(row.get(col_name))
+            # Enjoyment
+            for col in ['enjoyment', 'Enjoyment', 'what_you_might_enjoy', 'What You Might Enjoy']:
+                if col in self.df_personality.columns:
+                    enjoyment_text = row[col]
+                    if isinstance(enjoyment_text, str):
+                        personality['enjoyment'] = self._parse_list(enjoyment_text)
+                    else:
+                        personality['enjoyment'] = ["No enjoyment data available"]
                     break
+            if 'enjoyment' not in personality:
+                personality['enjoyment'] = ["No enjoyment data available"]
             
-            # Try to extract the interpretation
-            for col_name in ['How This Combination Interpret', 'How This Combination Interprets']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    personality["how_this_combination"] = str(row.get(col_name))
+            # Strengths
+            for col in ['strengths', 'Strengths', 'your_strength', 'Your Strength', 'Your strengths']:
+                if col in self.df_personality.columns:
+                    strengths_text = row[col]
+                    if isinstance(strengths_text, str):
+                        personality['your_strength'] = self._parse_list(strengths_text)
+                    else:
+                        personality['your_strength'] = ["No strength data available"]
                     break
+            if 'your_strength' not in personality:
+                personality['your_strength'] = ["No strength data available"]
             
-            # Try to extract what you might enjoy
-            for col_name in ['What You Might Enjoy', 'What you might enjoy']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    value = row.get(col_name)
-                    if isinstance(value, str):
-                        # Split by newlines or bullet points
-                        items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
-                        personality["what_you_might_enjoy"] = items
+            # Icon ID
+            for col in ['icon_id', 'Icon ID', 'Icon id', 'iconId']:
+                if col in self.df_personality.columns:
+                    personality['iconId'] = str(row[col])
                     break
-            
-            # Try to extract your strengths
-            for col_name in ['Your strength', 'Your Strength', 'Your strengths']:
-                if col_name in self.two_digit_df.columns and row.get(col_name):
-                    value = row.get(col_name)
-                    if isinstance(value, str):
-                        # Split by newlines or bullet points
-                        items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
-                        personality["your_strength"] = items
-                    break
+            if 'iconId' not in personality:
+                personality['iconId'] = "1"  # Default icon
             
             return personality
-            
         except Exception as e:
-            print(f"Error extracting personality from row: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            logger.error(f"Error getting personality type by code: {str(e)}")
+            logger.exception("Exception details:")
             return self._get_default_personality()
     
-    def _get_default_personality(self) -> Dict:
-        """Return a default personality when no match is found"""
+    def _get_default_personality(self) -> Dict[str, Any]:
+        """
+        Get a default personality type when no match is found.
+        
+        Returns:
+            Dictionary with default personality type information
+        """
         return {
-            "code": "XX",
-            "role": "Explorer",
-            "who_you_are": "You are a versatile individual with a unique combination of interests and skills.",
-            "how_this_combination": "Your profile suggests you have diverse interests that allow you to adapt to various situations.",
-            "what_you_might_enjoy": [
-                "Exploring different fields and interests",
-                "Learning new skills",
-                "Adapting to changing environments"
-            ],
-            "your_strength": [
-                "Versatility",
-                "Adaptability",
-                "Curiosity"
-            ],
-            "icon_id": "1"
+            "type": "Default Type",
+            "description": "We couldn't determine your specific personality type based on your answers.",
+            "interpretation": "Your answers indicate a unique combination of interests and preferences.",
+            "enjoyment": ["Exploring different career options", "Learning about your strengths and interests"],
+            "your_strength": ["Adaptability", "Unique perspective"],
+            "iconId": "1"
         }
-
-    def _get_industry_insights(self, three_digit_codes: List[str]) -> List[Dict]:
-        """Get industry insights for three-digit codes"""
+    
+    def _calculate_riasec_scores(self, answers: List[str]) -> Dict[str, int]:
+        """
+        Calculate RIASEC scores based on survey answers.
+        
+        Args:
+            answers: List of survey answers
+            
+        Returns:
+            Dictionary with RIASEC scores
+        """
         try:
-            print(f"Looking up industry insights for codes: {three_digit_codes}")
+            # Initialize scores
+            scores = {"R": 0, "I": 0, "A": 0, "S": 0, "E": 0, "C": 0}
             
-            if not three_digit_codes:
-                print("Warning: No three-digit codes provided")
-                return [self._get_default_industry()]
-            
-            # Initialize results list
-            results = []
-            
-            # Try to find matching industries for each code
-            for code in three_digit_codes:
-                # Ensure we have a valid code
-                if not code or len(code) != 3:
-                    print(f"Warning: Invalid three-digit code: {code}")
+            # Map answers to questions
+            for i, answer in enumerate(answers):
+                if i >= len(self.df_questions):
+                    logger.warning(f"Answer index {i} exceeds number of questions {len(self.df_questions)}")
+                    continue
+                    
+                question = self.df_questions.iloc[i]
+                
+                # Get the RIASEC category for this question
+                category = question.get('Category', '')
+                if not category or category not in scores:
+                    logger.warning(f"Invalid category '{category}' for question {i+1}")
                     continue
                 
-                # Try to find exact matches first
-                found_match = False
-                for _, row in self.industry_df.iterrows():
-                    # Get the matching code from the row
-                    matching_code = row.get('Matching code', '')
-                    
-                    if not isinstance(matching_code, str):
-                        continue
-                    
-                    # Check for exact match
-                    if matching_code.strip() == code:
-                        print(f"Found exact match for code: {code}")
-                        industry_info = self._extract_industry_from_row(row, code)
-                        results.append(industry_info)
-                        found_match = True
+                # Map answer to score
+                if answer == 'A':
+                    scores[category] += 2
+                elif answer == 'B':
+                    scores[category] += 1
+                # C and D don't add points
                 
-                # If no exact match, try to find partial matches
-                if not found_match:
-                    for _, row in self.industry_df.iterrows():
-                        matching_code = row.get('Matching code', '')
+            return scores
+        except Exception as e:
+            logger.error(f"Error calculating RIASEC scores: {str(e)}")
+            raise
+    
+    def _get_personality_type(self, riasec_scores: Dict[str, int]) -> Dict[str, Any]:
+        """
+        Get personality type based on RIASEC scores.
+        
+        Args:
+            riasec_scores: Dictionary with RIASEC scores
+            
+        Returns:
+            Dictionary with personality type information
+        """
+        try:
+            # Sort scores to get top categories
+            sorted_scores = sorted(riasec_scores.items(), key=lambda x: x[1], reverse=True)
+            top_categories = ''.join([cat for cat, _ in sorted_scores[:2]])
+            
+            # Find matching personality type
+            personality_match = self.df_personality[self.df_personality['Type'] == top_categories]
+            
+            if len(personality_match) == 0:
+                logger.warning(f"No personality type found for {top_categories}, trying reversed")
+                # Try reversed order
+                reversed_top = top_categories[::-1]
+                personality_match = self.df_personality[self.df_personality['Type'] == reversed_top]
+                
+                if len(personality_match) == 0:
+                    logger.error(f"No personality type found for {top_categories} or {reversed_top}")
+                    # Return a default personality type
+                    return {
+                        "type": top_categories,
+                        "description": "You have a unique combination of traits.",
+                        "interpretation": "Your personality profile shows a blend of different strengths.",
+                        "enjoyment": ["Problem-solving", "Learning new skills"],
+                        "your_strength": ["Adaptability", "Versatility"],
+                        "iconId": "1",
+                        "riasecScores": riasec_scores
+                    }
+            
+            # Get the first match
+            personality = personality_match.iloc[0]
+            
+            # Convert to dictionary
+            return {
+                "type": personality.get('Type', top_categories),
+                "description": personality.get('Description', ''),
+                "interpretation": personality.get('Interpretation', ''),
+                "enjoyment": self._parse_list(personality.get('Enjoyment', '')),
+                "your_strength": self._parse_list(personality.get('Your Strength', '')),
+                "iconId": str(personality.get('IconId', 1)),
+                "riasecScores": riasec_scores
+            }
+        except Exception as e:
+            logger.error(f"Error getting personality type: {str(e)}")
+            raise
+    
+    def _get_matching_industries(self, personality: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Get industries that match the personality type.
+        
+        Args:
+            personality: Dictionary with personality type information
+            
+        Returns:
+            List of dictionaries with industry information
+        """
+        try:
+            logger.info(f"Finding matching industries for personality type: {personality.get('type', 'Unknown')}")
+            
+            # Get the personality type code
+            personality_type = personality.get('type', '').upper()
+            
+            # Try to extract a code from the personality type if it's embedded
+            code_match = None
+            if 'riasecScores' in personality:
+                # Get the top two categories based on scores
+                scores = personality['riasecScores']
+                sorted_cats = sorted(scores.keys(), key=lambda k: scores[k], reverse=True)
+                code_match = ''.join(sorted_cats[:2]) if len(sorted_cats) >= 2 else None
+            
+            # If we couldn't extract a code, try to find it in the personality data
+            if not code_match:
+                # Look for common code patterns in the personality type
+                code_patterns = [
+                    r'([RIASEC]{2})',  # Look for two consecutive RIASEC letters
+                    r'Type: ([RIASEC]{2})',  # Look for "Type: XX"
+                    r'Code: ([RIASEC]{2})'   # Look for "Code: XX"
+                ]
+                
+                for pattern in code_patterns:
+                    match = re.search(pattern, personality_type)
+                    if match:
+                        code_match = match.group(1)
+                        break
+            
+            # If we still don't have a code, use the first two letters of the personality type
+            if not code_match and len(personality_type) >= 2:
+                first_two = personality_type[:2]
+                if all(c in 'RIASEC' for c in first_two):
+                    code_match = first_two
+            
+            # Get all industries
+            industries = []
+            
+            # Try different approaches to match industries
+            
+            # 1. Try to match by code
+            if code_match:
+                logger.info(f"Matching industries by code: {code_match}")
+                
+                # Try different possible column names for the code
+                code_columns = ['code', 'Code', 'holland_code', 'Holland Code', 'personality_code']
+                
+                for code_col in code_columns:
+                    if code_col in self.df_industries.columns:
+                        # Find industries with matching codes
+                        matching_industries = self.df_industries[
+                            self.df_industries[code_col].str.contains(code_match, case=False, na=False)
+                        ]
                         
-                        if not isinstance(matching_code, str):
-                            continue
-                        
-                        # Check if the first two characters match
-                        if len(matching_code) >= 2 and len(code) >= 2 and matching_code[:2] == code[:2]:
-                            print(f"Found partial match for code: {code} with {matching_code}")
-                            industry_info = self._extract_industry_from_row(row, code)
-                            results.append(industry_info)
-                            found_match = True
+                        if not matching_industries.empty:
+                            logger.info(f"Found {len(matching_industries)} industries matching code {code_match}")
                             break
                 
-                # If still no match, try to find any match with the first character
-                if not found_match:
-                    for _, row in self.industry_df.iterrows():
-                        matching_code = row.get('Matching code', '')
-                        
-                        if not isinstance(matching_code, str):
-                            continue
-                        
-                        # Check if the first character matches
-                        if len(matching_code) >= 1 and len(code) >= 1 and matching_code[0] == code[0]:
-                            print(f"Found first-character match for code: {code} with {matching_code}")
-                            industry_info = self._extract_industry_from_row(row, code)
-                            results.append(industry_info)
-                            found_match = True
-                            break
+                # If we found matching industries, process them
+                if 'matching_industries' in locals() and not matching_industries.empty:
+                    for _, row in matching_industries.iterrows():
+                        industry = self._extract_industry_data(row)
+                        if industry:
+                            industries.append(industry)
             
-            # If no matches found, return a default industry
-            if not results:
-                print("No industry matches found, using default")
-                results.append(self._get_default_industry())
+            # 2. If we didn't find any industries by code, get the top N industries
+            if not industries:
+                logger.info("No industries matched by code, getting top industries")
+                top_n = 3  # Number of industries to return
+                
+                for _, row in self.df_industries.head(top_n).iterrows():
+                    industry = self._extract_industry_data(row)
+                    if industry:
+                        industries.append(industry)
             
-            return results
+            # If we still don't have any industries, return a default one
+            if not industries:
+                logger.warning("No industries found, returning default industry")
+                industries = [{
+                    "id": "1",
+                    "name": "General Career Path",
+                    "overview": "Based on your personality type, you might enjoy a variety of career paths.",
+                    "trending": "Many fields are growing and offer opportunities for someone with your interests.",
+                    "insight": "Consider exploring different industries to find what resonates with your personal values and strengths.",
+                    "examplePaths": ["Research careers that match your interests", "Speak with a career counselor", "Try internships in different fields"],
+                    "education": "Various educational paths can lead to fulfilling careers."
+                }]
+            
+            logger.info(f"Returning {len(industries)} matching industries")
+            return industries
             
         except Exception as e:
-            print(f"Error in _get_industry_insights: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return [self._get_default_industry()]
+            logger.error(f"Error getting matching industries: {str(e)}")
+            logger.exception("Exception details:")
+            
+            # Return a default industry
+            return [{
+                "id": "1",
+                "name": "General Career Path",
+                "overview": "Based on your personality type, you might enjoy a variety of career paths.",
+                "trending": "Many fields are growing and offer opportunities for someone with your interests.",
+                "insight": "Consider exploring different industries to find what resonates with your personal values and strengths.",
+                "examplePaths": ["Research careers that match your interests", "Speak with a career counselor", "Try internships in different fields"],
+                "education": "Various educational paths can lead to fulfilling careers."
+            }]
     
-    def _extract_industry_from_row(self, row, matching_code: str) -> Dict:
-        """Extract industry information from a row in the industry_df"""
+    def _extract_industry_data(self, row) -> Dict[str, Any]:
+        """
+        Extract industry data from a DataFrame row.
+        
+        Args:
+            row: DataFrame row with industry data
+            
+        Returns:
+            Dictionary with industry information
+        """
         try:
-            # Initialize with default values
-            industry = {
-                "matching_code": matching_code,
-                "industry": "Default Industry",
-                "description": "Default industry description",
-                "trending": "Default trending information",
-                "insight": "Default industry insight",
-                "career_path": [],
-                "education": ""
-            }
+            industry = {}
             
-            # Extract industry name
-            if 'Industry' in self.industry_df.columns and row.get('Industry'):
-                industry["industry"] = str(row.get('Industry'))
+            # Try different possible column names for each field
             
-            # Extract description
-            if 'Description' in self.industry_df.columns and row.get('Description'):
-                industry["description"] = str(row.get('Description'))
+            # ID
+            for col in ['id', 'ID', 'industry_id']:
+                if col in row.index:
+                    industry['id'] = str(row[col])
+                    break
+            if 'id' not in industry:
+                industry['id'] = str(row.name + 1)  # Use row index + 1 as ID
             
-            # Extract trending information
-            if 'Trending' in self.industry_df.columns and row.get('Trending'):
-                industry["trending"] = str(row.get('Trending'))
+            # Name
+            for col in ['name', 'Name', 'industry', 'Industry']:
+                if col in row.index:
+                    industry['name'] = row[col]
+                    break
+            if 'name' not in industry:
+                industry['name'] = "Unknown Industry"
             
-            # Extract insight
-            if 'Insight' in self.industry_df.columns and row.get('Insight'):
-                industry["insight"] = str(row.get('Insight'))
+            # Overview
+            for col in ['overview', 'Overview', 'description', 'Description']:
+                if col in row.index:
+                    industry['overview'] = row[col]
+                    break
+            if 'overview' not in industry:
+                industry['overview'] = "No overview available"
             
-            # Extract career path
-            if 'Career path' in self.industry_df.columns and row.get('Career path'):
-                value = row.get('Career path')
-                if isinstance(value, str):
-                    # Split by newlines or bullet points
-                    items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
-                    industry["career_path"] = items
+            # Trending
+            for col in ['trending', 'Trending']:
+                if col in row.index:
+                    industry['trending'] = row[col]
+                    break
+            if 'trending' not in industry:
+                industry['trending'] = "No trending information available"
             
-            # Extract education
-            if 'Education' in self.industry_df.columns and row.get('Education'):
-                industry["education"] = str(row.get('Education'))
+            # Insight
+            for col in ['insight', 'Insight', 'insights', 'Insights']:
+                if col in row.index:
+                    industry['insight'] = row[col]
+                    break
+            if 'insight' not in industry:
+                industry['insight'] = "No insight available"
+            
+            # Example Paths
+            for col in ['examplePaths', 'example_paths', 'career_path', 'Career Path', 'career_paths']:
+                if col in row.index:
+                    paths_text = row[col]
+                    if isinstance(paths_text, str):
+                        industry['examplePaths'] = self._parse_list(paths_text)
+                    else:
+                        industry['examplePaths'] = ["No example paths available"]
+                    break
+            if 'examplePaths' not in industry:
+                industry['examplePaths'] = ["No example paths available"]
+            
+            # Education
+            for col in ['education', 'Education']:
+                if col in row.index:
+                    industry['education'] = row[col]
+                    break
+            if 'education' not in industry:
+                industry['education'] = "No education information available"
             
             return industry
             
         except Exception as e:
-            print(f"Error extracting industry from row: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
-            return self._get_default_industry()
+            logger.error(f"Error extracting industry data: {str(e)}")
+            return None
     
-    def _get_default_industry(self) -> Dict:
-        """Return a default industry when no match is found"""
-        return {
-            "matching_code": "XXX",
-            "industry": "General Career Path",
-            "description": "This is a general career path that encompasses various industries and roles.",
-            "trending": "Various fields are growing in today's economy, including technology, healthcare, and renewable energy.",
-            "insight": "Consider exploring different industries to find what aligns with your interests and strengths.",
-            "career_path": [
-                "Entry-level positions in various fields",
-                "Mid-level specialist roles",
-                "Management or leadership positions"
-            ],
-            "education": "Education requirements vary by field. Consider starting with a broad education and specializing based on your interests."
-        }
-
-    def process_basic_results(self, answers):
-        """Process survey answers and return basic results"""
-        try:
-            # Initialize category counts
-            category_counts = {
-                'R': 0, 'I': 0, 'A': 0, 'S': 0, 'E': 0, 'C': 0
-            }
-            
-            # Count answers for each category from the survey
-            questions = self.get_all_questions()
-            
-            # Log the answers and questions for debugging
-            print(f"Processing {len(answers)} answers for {len(questions)} questions")
-            
-            # Ensure we have questions to process
-            if not questions:
-                print("Warning: No questions found in the database")
-                raise ValueError("No questions found in the database")
-            
-            # Ensure answers is a list of strings
-            if not isinstance(answers, list):
-                print(f"Error: answers is not a list, it's a {type(answers)}")
-                raise ValueError(f"Expected answers to be a list, got {type(answers)}")
-            
-            # Ensure we have the right number of answers
-            if len(answers) < len(questions):
-                print(f"Warning: Not enough answers ({len(answers)}) for questions ({len(questions)})")
-                # Pad with empty answers
-                answers = answers + [''] * (len(questions) - len(answers))
-            elif len(answers) > len(questions):
-                print(f"Warning: Too many answers ({len(answers)}) for questions ({len(questions)})")
-                # Truncate extra answers
-                answers = answers[:len(questions)]
-            
-            # Process each answer
-            for q_idx, answer in enumerate(answers):
-                if q_idx < len(questions):
-                    question = questions[q_idx]
-                    category = question.get('category', '')
-                    
-                    # Validate the answer
-                    if not isinstance(answer, str):
-                        print(f"Warning: Answer at index {q_idx} is not a string: {answer}")
-                        continue
-                    
-                    # Only count 'Yes' answers (case insensitive)
-                    if answer.upper() in ['YES', 'Y'] and category in category_counts:
-                        category_counts[category] += 1
-                        print(f"Question {q_idx+1} (Category {category}): {answer} -> Count: {category_counts[category]}")
-
-            # Convert numpy.int64 to regular Python int
-            category_counts = {k: int(v) for k, v in category_counts.items()}
-            print(f"Final category counts: {category_counts}")
-
-            # Find categories with maximum scores
-            if any(category_counts.values()):  # Check if any category has a score
-                max_score = max(category_counts.values())
-                max_cats = [cat for cat, count in category_counts.items() if count == max_score]
-                
-                # Find categories with second highest scores
-                second_score = 0
-                second_cats = []
-                scores = sorted(set(category_counts.values()), reverse=True)
-                if len(scores) > 1:
-                    second_score = scores[1]
-                    second_cats = [cat for cat, count in category_counts.items() if count == second_score]
-                
-                # Find categories with third highest scores
-                third_score = 0
-                third_cats = []
-                if len(scores) > 2:
-                    third_score = scores[2]
-                    third_cats = [cat for cat, count in category_counts.items() if count == third_score]
-            else:
-                # If all categories have zero score, assign default values
-                max_cats = ['R']
-                second_cats = ['I']
-                third_cats = ['A']
-                print("Warning: All categories have zero score, using default values")
-
-            print(f"Top categories: {max_cats}, Second: {second_cats}, Third: {third_cats}")
-
-            # Generate three-digit and two-digit codes
-            three_digit_codes = self._generate_code(max_cats, second_cats, third_cats)
-            two_digit_codes = self._generate_two_digit_code(max_cats, second_cats)
-            
-            print(f"Generated codes - Three-digit: {three_digit_codes}, Two-digit: {two_digit_codes}")
-
-            # Get the mappings for both two-digit and three-digit codes
-            personality_type = self._get_two_digit_mapping(two_digit_codes[0])
-            industry_insights = self._get_industry_insights(three_digit_codes)
-
-            # Ensure all numeric values are Python integers, not numpy types
-            result = {
-                "category_counts": category_counts,
-                "three_digit_codes": three_digit_codes,
-                "two_digit_codes": two_digit_codes,
-                "primary_code": max_cats[0] if max_cats else 'X',
-                "personality_type": personality_type,
-                "recommended_industries": industry_insights
-            }
-            
-            print(f"Final result keys: {result.keys()}")
-            print(f"Personality type: {personality_type.get('role', 'Unknown')}")
-            print(f"Industries count: {len(industry_insights)}")
-            
-            return result
-        except Exception as e:
-            import traceback
-            print(f"Error in process_basic_results: {str(e)}")
-            print(traceback.format_exc())
-            # Return a default result instead of raising an exception
-            return {
-                "category_counts": {'R': 1, 'I': 1, 'A': 1, 'S': 1, 'E': 1, 'C': 1},
-                "three_digit_codes": ["RIA"],
-                "two_digit_codes": ["RI"],
-                "primary_code": 'R',
-                "personality_type": self._get_default_personality(),
-                "recommended_industries": [self._get_default_industry()]
-            }
-
-    def _generate_code(self, max_cats: List[str], second_cats: List[str], third_cats: List[str]) -> List[str]:
-        """Generate three-digit Holland code combinations"""
-        codes = []
+    def _parse_list(self, text: str) -> List[str]:
+        """
+        Parse a string into a list of items.
         
-        if len(max_cats) >= 3:
-            # If we have 3 or more categories with the same (highest) score
-            for combo in permutations(max_cats, 3):
-                codes.append(''.join(combo))
-        else:
-            # Fill remaining slots with second and third highest categories
-            remaining_slots = 3 - len(max_cats)
-            if remaining_slots > 0:
-                if len(second_cats) >= remaining_slots:
-                    for second_combo in permutations(second_cats, remaining_slots):
-                        code = ''.join(max_cats + list(second_combo))
-                        codes.append(code)
-                else:
-                    # Need to use some third highest categories
-                    needed_from_third = remaining_slots - len(second_cats)
-                    if needed_from_third > 0 and third_cats:
-                        for third_combo in permutations(third_cats, needed_from_third):
-                            code = ''.join(max_cats + second_cats + list(third_combo))
-                            codes.append(code)
-
-        return sorted(set(codes)) if codes else ['XXX']  # Return unique codes or placeholder
-
-    def _generate_two_digit_code(self, max_cats: List[str], second_cats: List[str]) -> List[str]:
-        """Generate two-digit Holland code combinations"""
-        codes = []
+        Args:
+            text: String to parse
+            
+        Returns:
+            List of strings
+        """
+        if not text or not isinstance(text, str):
+            return []
         
-        if len(max_cats) >= 2:
-            # If we have 2 or more categories with the same (highest) score
-            for combo in permutations(max_cats, 2):
-                codes.append(''.join(combo))
-        elif len(max_cats) == 1 and second_cats:
-            # One highest category, use second highest for second digit
-            for second_cat in second_cats:
-                codes.append(f"{max_cats[0]}{second_cat}")
-
-        return sorted(set(codes)) if codes else ['XX']  # Return unique codes or placeholder
+        # Try different delimiters
+        delimiters = ['\n', '//', '\\n', ';', ',']
+        
+        for delimiter in delimiters:
+            if delimiter in text:
+                # Split by delimiter and clean up each item
+                items = [item.strip() for item in text.split(delimiter) if item.strip()]
+                if items:
+                    return items
+        
+        # If no delimiter was found, return the text as a single item
+        return [text.strip()] 
