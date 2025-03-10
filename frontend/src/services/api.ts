@@ -53,6 +53,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
         
         try {
+            // Make the request with a longer timeout
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -67,39 +68,50 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             // Log the response status
             console.log('Survey submission response status:', response.status);
             
-            if (!response.ok) {
-                let errorMessage = `Submitting survey failed with status ${response.status}`;
-                try {
-                    const errorText = await response.text();
-                    console.error('Error response for submitting survey:', errorText);
-                    errorMessage += `: ${errorText}`;
-                } catch (e) {
-                    console.error('Could not parse error response for submitting survey');
-                }
-                throw new Error(errorMessage);
-            }
-            
-            // Try to parse the response as JSON
+            // Try to parse the response as JSON regardless of status code
+            let data;
             try {
-                const data = await response.json();
-                console.log('Analysis result received:', data);
-                
-                // Validate the result structure
-                if (!data || typeof data !== 'object') {
-                    console.error('Invalid result format:', data);
-                    throw new Error('Invalid result format received from API');
-                }
-                
-                if (!data.personality || !data.industries) {
-                    console.error('Missing required fields in result:', data);
-                    throw new Error('Missing required fields in result from API');
-                }
-                
-                return data;
+                data = await response.json();
+                console.log('Response data received:', data);
             } catch (jsonError) {
                 console.error('Error parsing JSON response:', jsonError);
+                
+                // Try to get the response text
+                try {
+                    const text = await response.text();
+                    console.error('Response text:', text);
+                } catch (textError) {
+                    console.error('Error getting response text:', textError);
+                }
+                
                 throw new Error('Failed to parse API response as JSON');
             }
+            
+            // Check if the response was successful
+            if (!response.ok) {
+                console.error('Error response:', response.status, data);
+                
+                // If we got a JSON response with an error message, use it
+                if (data && data.detail) {
+                    throw new Error(`API error: ${data.detail}`);
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            }
+            
+            // Validate the result structure
+            if (!data || typeof data !== 'object') {
+                console.error('Invalid result format:', data);
+                throw new Error('Invalid result format received from API');
+            }
+            
+            // Check if we have the expected fields
+            if (!data.personality || !data.industries) {
+                console.error('Missing required fields in result:', data);
+                throw new Error('Missing required fields in result from API');
+            }
+            
+            return data;
         } catch (fetchError: any) {
             if (fetchError.name === 'AbortError') {
                 console.error('Request timed out after 60 seconds');
