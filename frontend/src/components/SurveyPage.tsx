@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth } from '../services/api';
+import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -341,6 +341,25 @@ export function SurveyPage() {
     }
   };
 
+  // Add a test function for URL debugging
+  const testUrlDebug = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Testing URL debug endpoint...');
+      const result = await debugUrlTest();
+      
+      console.log('URL debug result:', result);
+      alert(`URL debug test successful. Check console for details.`);
+    } catch (error) {
+      console.error('Error in URL debug test:', error);
+      setError(`URL debug test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const checkHealth = async () => {
     try {
       setLoading(true);
@@ -528,6 +547,12 @@ export function SurveyPage() {
                 onClick={useDirectTest}
               >
                 Direct Test
+              </button>
+              <button
+                onClick={testUrlDebug}
+                className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+              >
+                URL Debug
               </button>
             </>
           )}
