@@ -3,5 +3,10 @@
   "clean_urls": true,
   "routes": {
     "/**": "index.html"
+  },
+  "proxies": {
+    "/api/": {
+      "origin": "https://ontrack-d4m7j.ondigitalocean.app/api"
+    }
   }
 }
