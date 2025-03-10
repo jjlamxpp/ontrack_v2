@@ -119,29 +119,37 @@ export function SurveyPage() {
 
       setLoading(true);
       console.log('Submitting survey answers...');
+      console.log('Total answers:', answers.length);
+      console.log('Answers:', answers);
       
       // Clear any previous errors
       setError(null);
       
-      const result = await submitSurveyAndGetAnalysis(answers);
-      console.log('Survey submitted successfully, received analysis result:', result);
-      
-      // Validate the result structure
-      if (!result.personality || !result.industries) {
-        throw new Error('Invalid result structure received from API');
+      try {
+        const result = await submitSurveyAndGetAnalysis(answers);
+        console.log('Survey submitted successfully, received analysis result:', result);
+        
+        // Validate the result structure
+        if (!result.personality || !result.industries) {
+          console.error('Invalid result structure:', result);
+          throw new Error('Invalid result structure received from API');
+        }
+        
+        // Store the result in localStorage
+        localStorage.setItem('analysisResult', JSON.stringify(result));
+        
+        // Clear survey answers after successful submission
+        localStorage.removeItem('surveyAnswers');
+        
+        // Navigate to result page
+        navigate('/result');
+      } catch (submitError) {
+        console.error('Error during survey submission:', submitError);
+        setError(submitError instanceof Error ? submitError.message : 'Failed to submit survey. Please try again.');
       }
-      
-      // Store the result in localStorage
-      localStorage.setItem('analysisResult', JSON.stringify(result));
-      
-      // Clear survey answers after successful submission
-      localStorage.removeItem('surveyAnswers');
-      
-      // Navigate to result page
-      navigate('/result');
     } catch (err) {
-      console.error('Submission error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to submit survey');
+      console.error('Unexpected error in handleSubmit:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
