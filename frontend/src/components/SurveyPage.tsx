@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest } from '../services/api';
+import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest, testPostEndpoint, debugRoutes } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -360,6 +360,44 @@ export function SurveyPage() {
     }
   };
 
+  // Add a test function for POST endpoint
+  const testPost = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Testing POST endpoint...');
+      const result = await testPostEndpoint();
+      
+      console.log('POST test result:', result);
+      alert(`POST test successful. Check console for details.`);
+    } catch (error) {
+      console.error('Error in POST test:', error);
+      setError(`POST test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a test function for routes endpoint
+  const testRoutes = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Testing routes endpoint...');
+      const result = await debugRoutes();
+      
+      console.log('Routes test result:', result);
+      alert(`Routes test successful. Found ${result.routes_count} routes. Check console for details.`);
+    } catch (error) {
+      console.error('Error in routes test:', error);
+      setError(`Routes test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const checkHealth = async () => {
     try {
       setLoading(true);
@@ -553,6 +591,18 @@ export function SurveyPage() {
                 className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
               >
                 URL Debug
+              </button>
+              <button
+                onClick={testPost}
+                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Test POST
+              </button>
+              <button
+                onClick={testRoutes}
+                className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Test Routes
               </button>
             </>
           )}
