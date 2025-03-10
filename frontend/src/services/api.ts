@@ -29,7 +29,7 @@ const handleApiError = async (response: Response, context: string) => {
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        const url = `${API_BASE_URL}/survey/questions`;
+        const url = `${window.location.origin}/api/survey/questions`;
         console.log('Fetching questions from:', url);
         
         const response = await fetch(url);
@@ -47,7 +47,7 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Add a debug function to test the API
 export async function debugSurveyTest(): Promise<any> {
     try {
-        const url = `${API_BASE_URL}/debug/survey-test`;
+        const url = `${window.location.origin}/api/debug/survey-test`;
         console.log('Testing survey API at:', url);
         
         const response = await fetch(url);
@@ -87,8 +87,9 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         
         console.log('Normalized answers before submission:', normalizedAnswers);
         
-        // Try the regular endpoint
-        const url = `${API_BASE_URL}/survey/submit`;
+        // Construct the correct URL for the survey submission endpoint
+        // The API_BASE_URL already includes '/api', so we should use '/survey/submit' not '/api/survey/submit'
+        const url = `${window.location.origin}/api/survey/submit`;
         console.log('Submitting survey to:', url);
         
         // Add a timeout to the fetch request
@@ -221,46 +222,52 @@ function getFallbackResult(): AnalysisResult {
 // Get character icon
 export async function getCharacterIcon(iconId: string): Promise<string> {
     try {
-        // Ensure iconId is properly formatted
-        const cleanIconId = iconId.replace(/\D/g, ''); // Remove any non-digits
-        const url = `${API_BASE_URL}/survey/icon/${cleanIconId}.png`; // Add .png extension
+        const url = `${window.location.origin}/api/survey/icon/${iconId}`;
+        console.log('Fetching character icon from:', url);
         
-        console.log('Fetching icon from:', url);
         const response = await fetch(url);
         
         if (!response.ok) {
-            console.error(`Failed to load icon ${cleanIconId}, status: ${response.status}`);
-            return '/fallback-icon.png';
+            console.error(`Failed to fetch icon with status ${response.status}`);
+            throw new Error(`Failed to fetch icon with status ${response.status}`);
         }
-
+        
+        // Create a blob URL for the image
         const blob = await response.blob();
-        return URL.createObjectURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
+        
+        return blobUrl;
     } catch (error) {
-        console.error('Error loading character icon:', error);
-        return '/fallback-icon.png';
+        console.error('Error fetching character icon:', error);
+        // Return a default icon or placeholder
+        return '/default-icon.png';
     }
 }
 
-// Get school logo with updated fallback path
+// Get school logo
 export async function getSchoolLogo(school: string): Promise<string> {
     try {
-        // Format school name properly
-        const cleanSchool = school.toLowerCase().replace(/\s+/g, '-');
-        const url = `${API_BASE_URL}/survey/school-icon/${cleanSchool}.png`;
-        
+        // Encode the school name for the URL
+        const encodedSchool = encodeURIComponent(school);
+        const url = `${window.location.origin}/api/survey/school-icon/${encodedSchool}`;
         console.log('Fetching school logo from:', url);
+        
         const response = await fetch(url);
         
         if (!response.ok) {
-            console.error(`Failed to load school logo for ${school}, status: ${response.status}`);
-            return '/fallback-school-icon.png';
+            console.error(`Failed to fetch school logo with status ${response.status}`);
+            throw new Error(`Failed to fetch school logo with status ${response.status}`);
         }
-
+        
+        // Create a blob URL for the image
         const blob = await response.blob();
-        return URL.createObjectURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
+        
+        return blobUrl;
     } catch (error) {
-        console.error('Error loading school logo:', error);
-        return '/fallback-school-icon.png';
+        console.error('Error fetching school logo:', error);
+        // Return a default logo or placeholder
+        return '/default-school-icon.png';
     }
 }
 
@@ -271,35 +278,35 @@ export function cleanupBlobUrl(url: string): void {
     }
 }
 
-// Add a function to check the file system
+// Debug file system
 export async function debugFileSystem(): Promise<any> {
     try {
-        const url = `${API_BASE_URL}/debug/file-system`;
-        console.log('Checking file system at:', url);
+        const url = `${window.location.origin}/api/debug/file-system`;
+        console.log('Debugging file system at:', url);
         
         const response = await fetch(url);
         
         if (!response.ok) {
-            console.error(`File system check failed with status ${response.status}`);
+            console.error(`Debug file system failed with status ${response.status}`);
             const errorText = await response.text();
             console.error('Error response:', errorText);
-            throw new Error(`File system check failed with status ${response.status}`);
+            throw new Error(`Debug file system failed with status ${response.status}`);
         }
         
         const data = await response.json();
-        console.log('File system check result:', data);
+        console.log('Debug file system result:', data);
         return data;
     } catch (error) {
-        console.error('Error in file system check:', error);
+        console.error('Error in debug file system:', error);
         throw error;
     }
 }
 
-// Add a function to use the direct test endpoint
+// Direct test for survey submission
 export async function directTest(answers: string[]): Promise<AnalysisResult> {
     try {
-        const url = `${API_BASE_URL}/direct-test`;
-        console.log('Using direct test endpoint:', url);
+        const url = `${window.location.origin}/api/direct-test`;
+        console.log('Direct testing at:', url);
         console.log('Answers being submitted:', answers);
         
         const response = await fetch(url, {
@@ -307,7 +314,7 @@ export async function directTest(answers: string[]): Promise<AnalysisResult> {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ answers }),
+            body: JSON.stringify({ answers })
         });
         
         if (!response.ok) {
@@ -322,24 +329,23 @@ export async function directTest(answers: string[]): Promise<AnalysisResult> {
         return data;
     } catch (error) {
         console.error('Error in direct test:', error);
-        throw error;
+        return getFallbackResult();
     }
 }
 
 // Check API health
 export async function checkApiHealth(): Promise<any> {
     try {
-        const url = `${API_BASE_URL}/health`;
+        const url = `${window.location.origin}/api/health`;
         console.log('Checking API health at:', url);
         
         const response = await fetch(url);
-        console.log('Health check response status:', response.status);
         
         if (!response.ok) {
-            console.error('Health check failed with status:', response.status);
+            console.error(`Health check failed with status ${response.status}`);
             return {
                 status: 'error',
-                message: `Health check failed with status: ${response.status}`
+                message: `Health check failed with status ${response.status}`
             };
         }
         
@@ -360,5 +366,29 @@ export async function checkApiHealth(): Promise<any> {
             status: 'error',
             message: error instanceof Error ? error.message : 'Unknown error'
         };
+    }
+}
+
+// Debug URL test
+export async function debugUrlTest(): Promise<any> {
+    try {
+        const url = `${window.location.origin}/api/debug/url-test`;
+        console.log('Testing URL at:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.error(`URL test failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`URL test failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('URL test result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in URL test:', error);
+        throw error;
     }
 }
