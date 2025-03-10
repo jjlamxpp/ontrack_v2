@@ -521,9 +521,9 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
         logger.info(f"Survey answers: {survey_data.answers}")
         
         # Validate the answers
-        if not survey_data.answers or len(survey_data.answers) < 10:
-            logger.error(f"Invalid survey data: not enough answers ({len(survey_data.answers)})")
-            raise HTTPException(status_code=400, detail="Not enough answers provided")
+        if not survey_data.answers:
+            logger.error("No answers provided in the request")
+            raise HTTPException(status_code=400, detail="No answers provided")
         
         # Initialize the database
         try:
@@ -534,11 +534,13 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 Path("/app/app/database/Database.xlsx"),
                 Path("app/database/Database.xlsx"),  # Relative path
                 Path("./app/database/Database.xlsx"),  # Another relative path
-                Path("/app/database/Database.xlsx")  # Direct path in container
+                Path("/app/database/Database.xlsx"),  # Direct path in container
+                Path(os.path.join(os.getcwd(), "app", "database", "Database.xlsx"))  # Absolute path using cwd
             ]
             
             # Log the current working directory
             logger.info(f"Current working directory: {os.getcwd()}")
+            logger.info(f"BASE_DIR: {BASE_DIR}")
             
             db = None
             for path in possible_paths:
@@ -566,13 +568,24 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 logger.error(f"Files in current directory: {list(Path('.').glob('*'))}")
                 logger.error(f"Files in app directory: {list(Path('app').glob('*')) if Path('app').exists() else 'app directory not found'}")
                 
-                logger.error("Could not find Database.xlsx in any expected location")
-                raise HTTPException(status_code=500, detail="Database file not found")
+                # As a last resort, try to create a new SurveyDatabase instance with the default path
+                try:
+                    logger.info("Trying to create SurveyDatabase with default path")
+                    db = SurveyDatabase()
+                    logger.info("Successfully created SurveyDatabase with default path")
+                except Exception as default_db_err:
+                    logger.error(f"Failed to create SurveyDatabase with default path: {str(default_db_err)}")
+                    logger.error(traceback.format_exc())
+                    raise HTTPException(status_code=500, detail="Database file not found")
             
             # Process the survey answers
             logger.info("Processing survey answers with database")
             try:
-                result = db.process_basic_results(survey_data.answers)
+                # Normalize answers to uppercase
+                normalized_answers = [answer.upper() for answer in survey_data.answers]
+                logger.info(f"Normalized answers: {normalized_answers}")
+                
+                result = db.process_basic_results(normalized_answers)
                 logger.info(f"Processed survey results: {result.keys()}")
             except Exception as process_err:
                 logger.error(f"Error processing survey results: {str(process_err)}")
