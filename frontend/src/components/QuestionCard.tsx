@@ -12,13 +12,13 @@ export const QuestionCard = ({ question, onAnswer }: QuestionCardProps) => {
       <div className="flex gap-4">
         <Button
           className="flex-1 bg-[#3B82F6] hover:bg-[#2563EB]"
-          onClick={() => onAnswer('yes')}
+          onClick={() => onAnswer('YES')}
         >
           YES
         </Button>
         <Button
           className="flex-1 bg-[#F87171] hover:bg-[#EF4444]"
-          onClick={() => onAnswer('no')}
+          onClick={() => onAnswer('NO')}
         >
           NO
         </Button>
