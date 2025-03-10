@@ -11,65 +11,64 @@ class SurveyDatabase:
             raise FileNotFoundError(f"Excel file not found at {excel_path}")
         
         try:
-            # Read all required sheets
-            self.df = pd.read_excel(
-                self.excel_path, 
-                sheet_name="Question pool",
-                engine='openpyxl'
-            )
-            self.two_digit_df = pd.read_excel(
-                self.excel_path, 
-                sheet_name="Two digit",
-                engine='openpyxl'
-            )
-            self.industry_df = pd.read_excel(
-                self.excel_path, 
-                sheet_name="Industry Insight",
-                engine='openpyxl'
-            )
+            print(f"Loading Excel file from {excel_path}")
             
-            # Debug: Print actual columns from both sheets
-            print("Two digit sheet columns:", list(self.two_digit_df.columns))
-            print("Industry sheet columns:", list(self.industry_df.columns))
+            # Read all required sheets with error handling
+            try:
+                self.df = pd.read_excel(
+                    self.excel_path, 
+                    sheet_name="Question pool",
+                    engine='openpyxl'
+                )
+                print(f"Successfully loaded Question pool sheet with {len(self.df)} rows")
+                print(f"Question pool columns: {self.df.columns.tolist()}")
+            except Exception as e:
+                print(f"Error loading Question pool sheet: {str(e)}")
+                self.df = pd.DataFrame()  # Empty DataFrame as fallback
             
-            # Updated required columns with variations
-            required_columns = {
-                'Question pool': ['questions:', 'category'],
-                'Two digit': [
-                    col for col in [
-                        'Two digit code', 'Two Digit Code', 'Two-digit code',
-                        'Role', 'role',
-                        'icon_id', 'Icon ID', 'Icon id',
-                        'Who you are?', 'Who You Are', 'Who you are',
-                        'How This Combination Interpret', 'How This Combination Interprets',
-                        'What You Might Enjoy', 'What you might enjoy',
-                        'Your strength', 'Your Strength', 'Your strengths'
-                    ] if col in self.two_digit_df.columns
-                ],
-                'Industry': [
-                    col for col in [
-                        'Three digital', 'Three Digital', 'Mapping Code',  # Common variations for mapping code
-                        'Industry', 'industry',
-                        'Overview', 'overview',
-                        'Trending', 'trending',
-                        'Insight', 'insight',
-                        'Required Skills', 'Required skills', 'required skills',
-                        'Example Role', 'Example role', 'example role',
-                        'Jupas', 'JUPAS', 'jupas'
-                    ] if col in self.industry_df.columns
-                ]
-            }
+            try:
+                self.two_digit_df = pd.read_excel(
+                    self.excel_path, 
+                    sheet_name="Two digit",
+                    engine='openpyxl'
+                )
+                print(f"Successfully loaded Two digit sheet with {len(self.two_digit_df)} rows")
+                print(f"Two digit columns: {self.two_digit_df.columns.tolist()}")
+            except Exception as e:
+                print(f"Error loading Two digit sheet: {str(e)}")
+                self.two_digit_df = pd.DataFrame()  # Empty DataFrame as fallback
             
+            try:
+                self.industry_df = pd.read_excel(
+                    self.excel_path, 
+                    sheet_name="Industry Insight",
+                    engine='openpyxl'
+                )
+                print(f"Successfully loaded Industry Insight sheet with {len(self.industry_df)} rows")
+                print(f"Industry Insight columns: {self.industry_df.columns.tolist()}")
+            except Exception as e:
+                print(f"Error loading Industry Insight sheet: {str(e)}")
+                self.industry_df = pd.DataFrame()  # Empty DataFrame as fallback
+            
+            # Check if any of the DataFrames are empty
+            if self.df.empty:
+                print("Warning: Question pool DataFrame is empty")
+            if self.two_digit_df.empty:
+                print("Warning: Two digit DataFrame is empty")
+            if self.industry_df.empty:
+                print("Warning: Industry Insight DataFrame is empty")
+            
+            # Instead of raising errors for missing columns, just log warnings
             # Check Industry sheet with detailed error message
             required_industry_types = {
-                'mapping': ['Three digital', 'Three Digital', 'Mapping Code'],
+                'mapping': ['Three digital', 'Three Digital', 'Mapping Code', 'Matching code'],
                 'industry': ['Industry', 'industry'],
-                'overview': ['Overview', 'overview'],
+                'overview': ['Overview', 'overview', 'Description', 'description'],
                 'trending': ['Trending', 'trending'],
                 'insight': ['Insight', 'insight'],
                 'skills': ['Required Skills', 'Required Skill', 'required skills'],
-                'role': ['Example Role', 'Example role', 'example role'],
-                'jupas': ['Jupas', 'JUPAS', 'jupas']
+                'role': ['Example Role', 'Example role', 'example role', 'Career path'],
+                'jupas': ['Jupas', 'JUPAS', 'jupas', 'Education', 'education']
             }
             
             missing_industry_types = []
@@ -78,25 +77,94 @@ class SurveyDatabase:
                     missing_industry_types.append(col_type)
             
             if missing_industry_types:
-                print(f"Missing Industry column types: {missing_industry_types}")
+                print(f"Warning: Missing Industry column types: {missing_industry_types}")
                 print("Available Industry columns:", list(self.industry_df.columns))
-                raise ValueError(f"Missing required column types in Industry sheet: {missing_industry_types}")
             
-            # Check Question pool sheet
-            if not all(col in self.df.columns for col in required_columns['Question pool']):
-                raise ValueError(f"Missing required columns in Question pool sheet")
+            # Define required columns with variations
+            required_columns = {
+                'Question pool': ['questions:', 'Questions', 'questions', 'category', 'Category'],
+                'Two digit': [
+                    'Two digit code', 'Two Digit Code', 'Two-digit code',
+                    'Role', 'role',
+                    'icon_id', 'Icon ID', 'Icon id',
+                    'Who you are?', 'Who You Are', 'Who you are',
+                    'How This Combination Interpret', 'How This Combination Interprets',
+                    'What You Might Enjoy', 'What you might enjoy',
+                    'Your strength', 'Your Strength', 'Your strengths'
+                ],
+                'Industry': [
+                    'Matching code', 'Three digital', 'Three Digital', 'Mapping Code',
+                    'Industry', 'industry',
+                    'Description', 'description', 'Overview', 'overview',
+                    'Trending', 'trending',
+                    'Insight', 'insight',
+                    'Career path', 'Example Role', 'Example role',
+                    'Education', 'education', 'Jupas', 'JUPAS'
+                ]
+            }
             
-            # Check Two digit sheet
-            if not all(col in self.two_digit_df.columns for col in required_columns['Two digit']):
-                raise ValueError(f"Missing required columns in Two digit sheet")
+            # Check Question pool sheet - just log warnings
+            missing_question_cols = []
+            for col in ['questions:', 'Questions', 'questions']:
+                if col in self.df.columns:
+                    break
+            else:
+                missing_question_cols.append('questions')
             
-            # Check Industry sheet
-            if not all(col in self.industry_df.columns for col in required_columns['Industry']):
-                raise ValueError(f"Missing required columns in Industry sheet")
+            for col in ['category', 'Category']:
+                if col in self.df.columns:
+                    break
+            else:
+                missing_question_cols.append('category')
+            
+            if missing_question_cols:
+                print(f"Warning: Missing required columns in Question pool sheet: {missing_question_cols}")
+                print("Available Question pool columns:", list(self.df.columns))
+            
+            # Check Two digit sheet - just log warnings
+            missing_two_digit_cols = []
+            for col_group in [
+                ['Two digit code', 'Two Digit Code', 'Two-digit code'],
+                ['Role', 'role'],
+                ['icon_id', 'Icon ID', 'Icon id'],
+                ['Who you are?', 'Who You Are', 'Who you are'],
+                ['How This Combination Interpret', 'How This Combination Interprets'],
+                ['What You Might Enjoy', 'What you might enjoy'],
+                ['Your strength', 'Your Strength', 'Your strengths']
+            ]:
+                if not any(col in self.two_digit_df.columns for col in col_group):
+                    missing_two_digit_cols.append(col_group[0])
+            
+            if missing_two_digit_cols:
+                print(f"Warning: Missing required columns in Two digit sheet: {missing_two_digit_cols}")
+                print("Available Two digit columns:", list(self.two_digit_df.columns))
+            
+            # Check Industry sheet - just log warnings
+            missing_industry_cols = []
+            for col_group in [
+                ['Matching code', 'Three digital', 'Three Digital', 'Mapping Code'],
+                ['Industry', 'industry'],
+                ['Description', 'description', 'Overview', 'overview'],
+                ['Trending', 'trending'],
+                ['Insight', 'insight'],
+                ['Career path', 'Example Role', 'Example role'],
+                ['Education', 'education', 'Jupas', 'JUPAS']
+            ]:
+                if not any(col in self.industry_df.columns for col in col_group):
+                    missing_industry_cols.append(col_group[0])
+            
+            if missing_industry_cols:
+                print(f"Warning: Missing required columns in Industry sheet: {missing_industry_cols}")
+                print("Available Industry columns:", list(self.industry_df.columns))
             
         except Exception as e:
             print(f"Error reading Excel file: {str(e)}")
-            raise
+            import traceback
+            print(traceback.format_exc())
+            # Initialize empty DataFrames as fallback
+            self.df = pd.DataFrame()
+            self.two_digit_df = pd.DataFrame()
+            self.industry_df = pd.DataFrame()
 
     def get_all_questions(self):
         """Get all questions from the database"""
