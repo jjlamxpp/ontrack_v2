@@ -16,7 +16,104 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from excel_db import SurveyDatabase  # Import from local file
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
+
+# Log the current directory and its contents to help with debugging
+logger.info(f"Current working directory: {os.getcwd()}")
+try:
+    logger.info(f"Contents of current directory: {os.listdir(os.getcwd())}")
+    
+    # Try to list contents of app directory if it exists
+    app_dir = os.path.join(os.getcwd(), "app")
+    if os.path.exists(app_dir):
+        logger.info(f"Contents of app directory: {os.listdir(app_dir)}")
+        
+        # Try to list contents of app/database directory if it exists
+        db_dir = os.path.join(app_dir, "database")
+        if os.path.exists(db_dir):
+            logger.info(f"Contents of app/database directory: {os.listdir(db_dir)}")
+    
+    # Ensure excel_db.py is in the correct locations
+    # First, check if it exists in the current directory
+    if os.path.exists("excel_db.py"):
+        logger.info("excel_db.py found in current directory")
+        
+        # Create app/database directory if it doesn't exist
+        os.makedirs("app/database", exist_ok=True)
+        
+        # Copy excel_db.py to app/database if it doesn't exist there
+        if not os.path.exists("app/database/excel_db.py"):
+            logger.info("Copying excel_db.py to app/database")
+            import shutil
+            shutil.copy2("excel_db.py", "app/database/excel_db.py")
+    else:
+        logger.warning("excel_db.py not found in current directory")
+except Exception as e:
+    logger.error(f"Error listing directory contents: {str(e)}")
+
+# Try different import paths for SurveyDatabase
+try:
+    # First try importing from app.database
+    from app.database.excel_db import SurveyDatabase
+except ImportError:
+    try:
+        # Then try importing from the local directory
+        from excel_db import SurveyDatabase
+    except ImportError:
+        # If both fail, try to find the file and import it dynamically
+        import importlib.util
+        import sys
+        
+        # Look for excel_db.py in common locations
+        possible_paths = [
+            os.path.join(os.getcwd(), "excel_db.py"),
+            os.path.join(os.getcwd(), "app", "database", "excel_db.py"),
+            os.path.join(os.getcwd(), "database", "excel_db.py"),
+            "/app/excel_db.py",
+            "/app/app/database/excel_db.py"
+        ]
+        
+        excel_db_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                excel_db_path = path
+                break
+        
+        if excel_db_path:
+            # If found, import it dynamically
+            module_name = "excel_db"
+            spec = importlib.util.spec_from_file_location(module_name, excel_db_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            SurveyDatabase = module.SurveyDatabase
+        else:
+            # If not found, create a dummy class to prevent startup errors
+            class SurveyDatabase:
+                def __init__(self, excel_path=None):
+                    self.excel_path = excel_path
+                    print(f"WARNING: Using dummy SurveyDatabase. Could not find excel_db.py")
+                
+                def process_survey(self, answers):
+                    return {
+                        "personality": {
+                            "type": "Error",
+                            "description": "Database module could not be loaded",
+                            "interpretation": "Please check server logs for details",
+                            "enjoyment": ["Contact support"],
+                            "your_strength": ["Patience"],
+                            "iconId": "1",
+                            "riasecScores": {"R": 0.5, "I": 0.5, "A": 0.5, "S": 0.5, "E": 0.5, "C": 0.5}
+                        },
+                        "industries": []
+                    }
 
 # Add these Pydantic models for your API
 class Question(BaseModel):
@@ -49,16 +146,6 @@ class IndustryRecommendation(BaseModel):
 class AnalysisResult(BaseModel):
     personality: PersonalityAnalysis
     industries: List[IndustryRecommendation]
-
-# Set up logging with more verbose output
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # Export BASE_DIR as a global variable for other modules to use
 BASE_DIR = Path(__file__).resolve().parent
