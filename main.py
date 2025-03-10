@@ -840,14 +840,14 @@ async def debug_database():
     """Debug endpoint to check the database status"""
     try:
         # Try to find the Excel file in different possible locations
-        excel_path = Path("/app/app/database/Database.xlsx")
+        excel_path = Path("/app/database/Database.xlsx")
         logger.info(f"Looking for Excel file at: {excel_path}")
         
         result = {
             "file_exists": excel_path.exists(),
             "file_path": str(excel_path),
             "current_directory": os.getcwd(),
-            "database_directory_exists": (Path("/app/app/database")).exists(),
+            "database_directory_exists": (Path("/app/database")).exists(),
         }
         
         if excel_path.exists():
@@ -873,7 +873,7 @@ async def debug_database():
             }
         else:
             # List all files in the app/database directory to help debug
-            database_dir = Path("/app/app/database")
+            database_dir = Path("/app/database")
             if database_dir.exists():
                 result["database_dir_contents"] = [str(p) for p in database_dir.glob("*")]
             else:
