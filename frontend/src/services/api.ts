@@ -48,19 +48,53 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         console.log('Submitting survey to:', url);
         console.log('Answers being submitted:', answers);
         
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ answers }),
-        });
+        // Add a timeout to the fetch request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        await handleApiError(response, 'Submitting survey');
-        
-        const data = await response.json();
-        console.log('Analysis result received:', data);
-        return data;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ answers }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                let errorMessage = `Submitting survey failed with status ${response.status}`;
+                try {
+                    const errorText = await response.text();
+                    console.error(`Error response for submitting survey:`, errorText);
+                    errorMessage += `: ${errorText}`;
+                } catch (e) {
+                    console.error(`Could not parse error response for submitting survey`);
+                }
+                throw new Error(errorMessage);
+            }
+            
+            const data = await response.json();
+            console.log('Analysis result received:', data);
+            
+            // Validate the result structure
+            if (!data.personality || !data.industries) {
+                console.error('Invalid result structure:', data);
+                throw new Error('Invalid result structure received from API');
+            }
+            
+            return data;
+        } catch (fetchError: any) {
+            if (fetchError.name === 'AbortError') {
+                console.error('Request timed out after 30 seconds');
+                throw new Error('Request timed out. Please try again.');
+            }
+            throw fetchError;
+        } finally {
+            clearTimeout(timeoutId);
+        }
     } catch (error) {
         console.error('Error submitting survey:', error);
         throw error;
