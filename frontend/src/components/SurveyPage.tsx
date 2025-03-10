@@ -130,6 +130,9 @@ export function SurveyPage() {
         const normalizedAnswers = answers.map(answer => answer.toUpperCase());
         console.log('Normalized answers:', normalizedAnswers);
         
+        // Add a delay to ensure the loading state is visible
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
         console.log('Survey submitted successfully, received analysis result:', result);
         
@@ -149,11 +152,91 @@ export function SurveyPage() {
         navigate('/result');
       } catch (submitError) {
         console.error('Error during survey submission:', submitError);
-        setError(submitError instanceof Error ? submitError.message : 'Failed to submit survey. Please try again.');
+        
+        // Show a more user-friendly error message
+        if (submitError instanceof Error) {
+          if (submitError.message.includes('timed out')) {
+            setError('The request timed out. Please check your internet connection and try again.');
+          } else if (submitError.message.includes('API error')) {
+            setError(`Server error: ${submitError.message}`);
+          } else if (submitError.message.includes('parse')) {
+            setError('There was a problem processing the server response. Please try again.');
+          } else {
+            setError(`Failed to submit survey: ${submitError.message}`);
+          }
+        } else {
+          setError('An unknown error occurred. Please try again.');
+        }
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a test function to verify API connectivity
+  const testApiConnection = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Test the basic API endpoint
+      const testUrl = `${apiConfig.apiBaseUrl}/test`;
+      console.log('Testing API connection at:', testUrl);
+      
+      const response = await fetch(testUrl);
+      const data = await response.json();
+      
+      console.log('API test response:', data);
+      
+      if (data.status === 'ok') {
+        alert('API connection successful! The API is working.');
+      } else {
+        alert(`API test failed: ${data.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('API test error:', error);
+      alert(`API test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Add a test function to verify survey submission
+  const testSurveySubmission = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Test the survey submission endpoint
+      const testUrl = `${apiConfig.apiBaseUrl}/test-submit`;
+      console.log('Testing survey submission at:', testUrl);
+      
+      const response = await fetch(testUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ answers: Array(42).fill('YES') }),
+      });
+      
+      const data = await response.json();
+      console.log('Test survey submission response:', data);
+      
+      if (data.personality && data.industries) {
+        // Store the result in localStorage
+        localStorage.setItem('analysisResult', JSON.stringify(data));
+        
+        // Navigate to result page
+        navigate('/result');
+      } else {
+        alert('Test survey submission failed: Invalid response format');
+      }
+    } catch (error) {
+      console.error('Test survey submission error:', error);
+      alert(`Test survey submission error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
