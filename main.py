@@ -249,10 +249,16 @@ app.add_middleware(SPAMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods including POST
+    allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
+)
+
+# Add trusted host middleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]  # Allow all hosts
 )
 
 # Define static directories
@@ -668,7 +674,7 @@ async def submit_survey(survey_data: SurveyRequest):
         try:
             # Initialize the database with a relative path that works in both local and deployed environments
             # First try the absolute path for deployed environment
-            db_path = "/app/database/Database.xlsx"
+            db_path = "/app/app/database/Database.xlsx"
             
             # If that doesn't exist, try the relative path for local development
             if not os.path.exists(db_path):
@@ -783,17 +789,40 @@ async def test_survey_api():
     return {"status": "ok", "message": "Survey API is working"}
 
 # Add a debug endpoint to list all routes
-@app.get("/debug/routes")
+@app.get("/api/debug/routes")
 async def debug_routes():
-    """List all registered routes for debugging"""
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": getattr(route, "path", "Unknown"),
-            "name": getattr(route, "name", "Unknown"),
-            "methods": getattr(route, "methods", ["Unknown"])
-        })
-    return {"routes": routes}
+    """
+    Debug endpoint to list all registered routes.
+    """
+    try:
+        # Get all routes
+        routes = []
+        for route in app.routes:
+            route_info = {
+                "path": getattr(route, "path", "Unknown"),
+                "name": getattr(route, "name", "Unknown"),
+                "methods": getattr(route, "methods", ["Unknown"]),
+                "endpoint": str(getattr(route, "endpoint", "Unknown")),
+            }
+            routes.append(route_info)
+        
+        # Sort routes by path
+        routes.sort(key=lambda x: x["path"])
+        
+        # Return the routes
+        return {
+            "status": "success",
+            "message": "Routes listed successfully",
+            "routes": routes,
+            "routes_count": len(routes)
+        }
+    except Exception as e:
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"Failed to list routes: {str(e)}",
+            "error_details": traceback.format_exc()
+        }
 
 # IMPORTANT: Make sure this code appears BEFORE any static file mounts or catch-all routes
 # Import the survey router
@@ -883,15 +912,42 @@ async def health_check():
     }
 
 @app.post("/api/test-post")
-async def test_post_method(request: Request):
-    """Test endpoint to verify POST method works"""
+async def test_post_endpoint(request: Request):
+    """
+    Simple test endpoint to verify that POST requests are working correctly.
+    """
     try:
-        body = await request.json()
-        logger.info(f"POST test endpoint called with body: {body}")
-        return {"status": "ok", "message": "POST method is working", "received": body}
+        # Log the request
+        logger.info(f"Received test POST request")
+        
+        # Try to parse the request body
+        try:
+            body = await request.json()
+            logger.info(f"Request body: {body}")
+        except Exception as e:
+            logger.error(f"Error parsing request body: {str(e)}")
+            body = {"error": "Could not parse request body"}
+        
+        # Return a simple response
+        return {
+            "status": "success",
+            "message": "POST request received successfully",
+            "request_body": body,
+            "request_headers": dict(request.headers),
+            "request_method": request.method,
+            "request_url": str(request.url)
+        }
     except Exception as e:
-        logger.error(f"Error in test POST endpoint: {str(e)}")
-        return {"status": "error", "message": str(e)}
+        # Log the error
+        logger.error(f"Unexpected error in test_post_endpoint: {str(e)}")
+        logger.exception("Exception details:")
+        
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"Test POST request failed: {str(e)}",
+            "error_details": traceback.format_exc()
+        }
 
 # Add a debug endpoint to check the database status
 @app.get("/api/debug/database")
