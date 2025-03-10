@@ -44,9 +44,38 @@ export async function fetchQuestions(): Promise<Question[]> {
     }
 }
 
+// Add a debug function to test the API
+export async function debugSurveyTest(): Promise<any> {
+    try {
+        const url = `${API_BASE_URL}/debug/survey-test`;
+        console.log('Testing survey API at:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.error(`Debug test failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Debug test failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Debug test result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in debug test:', error);
+        throw error;
+    }
+}
+
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
+        // Log the API base URL and environment
+        console.log('API_BASE_URL:', API_BASE_URL);
+        console.log('Current origin:', window.location.origin);
+        console.log('Current pathname:', window.location.pathname);
+        
         // Try the regular endpoint first
         const url = `${API_BASE_URL}/survey/submit`;
         console.log('Submitting survey to:', url);
@@ -202,5 +231,60 @@ export async function getSchoolLogo(school: string): Promise<string> {
 export function cleanupBlobUrl(url: string): void {
     if (url && url.startsWith('blob:')) {
         URL.revokeObjectURL(url);
+    }
+}
+
+// Add a function to check the file system
+export async function debugFileSystem(): Promise<any> {
+    try {
+        const url = `${API_BASE_URL}/debug/file-system`;
+        console.log('Checking file system at:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.error(`File system check failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`File system check failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('File system check result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in file system check:', error);
+        throw error;
+    }
+}
+
+// Add a function to use the direct test endpoint
+export async function directTest(answers: string[]): Promise<AnalysisResult> {
+    try {
+        const url = `${API_BASE_URL}/direct-test`;
+        console.log('Using direct test endpoint:', url);
+        console.log('Answers being submitted:', answers);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ answers }),
+        });
+        
+        if (!response.ok) {
+            console.error(`Direct test failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Direct test failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Direct test result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in direct test:', error);
+        throw error;
     }
 }
