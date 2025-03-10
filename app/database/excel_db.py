@@ -106,7 +106,7 @@ class SurveyDatabase:
         Process survey answers and return personality analysis.
         
         Args:
-            answers: List of survey answers (A, B, C, etc.)
+            answers: List of survey answers (A, B, C, etc. or yes/no)
             
         Returns:
             Dictionary with personality analysis and matching industries
@@ -123,8 +123,14 @@ class SurveyDatabase:
             answers = [a.upper() if isinstance(a, str) else a for a in answers]
             logger.info(f"Normalized answers: {answers}")
             
-            # Check if we should use the ontrack_zh approach (yes/no answers)
-            if all(a in ['YES', 'NO', 'Yes', 'No', 'yes', 'no'] for a in answers if isinstance(a, str)):
+            # Check if we should use the yes/no approach
+            # Look for any yes/no answers in the first few answers to determine the format
+            sample_answers = answers[:min(5, len(answers))]
+            yes_no_format = any(a in ['YES', 'NO', 'Y', 'N'] for a in sample_answers if isinstance(a, str))
+            
+            logger.info(f"Detected answer format: {'yes/no' if yes_no_format else 'A/B/C/D'}")
+            
+            if yes_no_format:
                 logger.info("Using yes/no answer processing approach")
                 return self._process_yes_no_survey(answers)
             
@@ -167,6 +173,9 @@ class SurveyDatabase:
                 'S': 0, 'E': 0, 'C': 0
             }
             
+            # Define what counts as a "yes" answer
+            yes_answers = ['YES', 'Y', 'TRUE', 'T', '1']
+            
             # Get questions with their categories
             questions = []
             for idx, row in self.df_questions.iterrows():
@@ -191,12 +200,28 @@ class SurveyDatabase:
                         'category': category
                     })
             
+            logger.info(f"Loaded {len(questions)} questions with categories")
+            
             # Count answers for each category from the survey
             for q_idx, answer in enumerate(answers):
-                if q_idx < len(questions) and answer.upper() in ['YES', 'Y']:
+                # Skip if the answer is not a string or the question index is out of range
+                if not isinstance(answer, str) or q_idx >= len(questions):
+                    continue
+                    
+                # Normalize the answer to uppercase
+                answer_upper = answer.upper()
+                
+                # Check if this is a "yes" answer
+                if answer_upper in yes_answers:
                     category = questions[q_idx]['category']
+                    # Make sure the category is valid
                     if category in category_counts:
                         category_counts[category] += 1
+                        logger.info(f"Question {q_idx+1} (category {category}): YES")
+                    else:
+                        logger.warning(f"Invalid category '{category}' for question {q_idx+1}")
+                else:
+                    logger.info(f"Question {q_idx+1}: NO or invalid answer")
             
             logger.info(f"Category counts: {category_counts}")
             
