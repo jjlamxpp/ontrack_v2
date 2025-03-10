@@ -88,7 +88,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         console.log('Normalized answers before submission:', normalizedAnswers);
         
         // Construct the correct URL for the survey submission endpoint
-        // The API_BASE_URL already includes '/api', so we should use '/survey/submit' not '/api/survey/submit'
+        // Use the absolute URL to avoid any path issues
         const url = `${window.location.origin}/api/survey/submit`;
         console.log('Submitting survey to:', url);
         
@@ -97,11 +97,17 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
         try {
-            // Make the request
+            // Make the request with explicit method and headers
+            console.log('Making POST request with the following options:');
+            console.log('- Method: POST');
+            console.log('- Headers: Content-Type: application/json');
+            console.log('- Body:', JSON.stringify({ answers: normalizedAnswers }));
+            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ answers: normalizedAnswers }),
                 signal: controller.signal
@@ -111,6 +117,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             
             // Log the response status
             console.log('Survey submission response status:', response.status);
+            console.log('Survey submission response headers:', response.headers);
             
             // Try to parse the response as JSON regardless of status code
             let data;
@@ -389,6 +396,71 @@ export async function debugUrlTest(): Promise<any> {
         return data;
     } catch (error) {
         console.error('Error in URL test:', error);
+        throw error;
+    }
+}
+
+// Test POST endpoint
+export async function testPostEndpoint(): Promise<any> {
+    try {
+        const url = `${window.location.origin}/api/test-post`;
+        console.log('Testing POST endpoint at:', url);
+        
+        const testData = {
+            test: true,
+            message: "This is a test POST request",
+            timestamp: new Date().toISOString()
+        };
+        
+        console.log('Sending test data:', testData);
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(testData)
+        });
+        
+        console.log('POST test response status:', response.status);
+        
+        if (!response.ok) {
+            console.error(`POST test failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`POST test failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('POST test result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in POST test:', error);
+        throw error;
+    }
+}
+
+// Debug routes
+export async function debugRoutes(): Promise<any> {
+    try {
+        const url = `${window.location.origin}/api/debug/routes`;
+        console.log('Debugging routes at:', url);
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            console.error(`Debug routes failed with status ${response.status}`);
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Debug routes failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Debug routes result:', data);
+        return data;
+    } catch (error) {
+        console.error('Error in debug routes:', error);
         throw error;
     }
 }
