@@ -574,7 +574,7 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
         # Initialize the database
         try:
             # Try to find the Excel file in different possible locations
-            excel_path = Path("/app/app/database/Database.xlsx")
+            excel_path = Path("/app/database/Database.xlsx")
             logger.info(f"Looking for Excel file at: {excel_path}")
             
             if not excel_path.exists():
@@ -846,6 +846,7 @@ async def debug_database():
         result = {
             "file_exists": excel_path.exists(),
             "file_path": str(excel_path),
+            "absolute_path": str(excel_path.absolute()),
             "current_directory": os.getcwd(),
             "database_directory_exists": (Path("/app/database")).exists(),
         }
@@ -897,6 +898,266 @@ async def debug_database():
             "error": str(e),
             "traceback": traceback.format_exc(),
         }
+
+# Add a comprehensive test endpoint to diagnose the survey submission issue
+@app.get("/api/debug/survey-test")
+async def debug_survey_test():
+    """Comprehensive test endpoint to diagnose the survey submission issue"""
+    try:
+        result = {
+            "environment": {
+                "current_directory": os.getcwd(),
+                "python_version": sys.version,
+                "platform": sys.platform,
+                "base_dir": str(BASE_DIR),
+                "app_dir": str(APP_DIR),
+            },
+            "file_system": {},
+            "database": {},
+            "test_processing": {}
+        }
+        
+        # Check file system
+        paths_to_check = [
+            "app",
+            "app/database",
+            "app/database/Database.xlsx",
+            "frontend",
+            "frontend/dist",
+            "frontend/dist/index.html"
+        ]
+        
+        for path in paths_to_check:
+            p = Path(path)
+            result["file_system"][path] = {
+                "exists": p.exists(),
+                "is_file": p.is_file() if p.exists() else None,
+                "is_dir": p.is_dir() if p.exists() else None,
+                "absolute_path": str(p.absolute()),
+                "size": os.path.getsize(p) if p.exists() and p.is_file() else None
+            }
+            
+            # List directory contents if it's a directory
+            if p.exists() and p.is_dir():
+                result["file_system"][path]["contents"] = [str(f.name) for f in p.glob("*")]
+        
+        # Check database
+        excel_path = Path("/app/database/Database.xlsx")
+        result["database"]["excel_path"] = str(excel_path)
+        result["database"]["excel_exists"] = excel_path.exists()
+        
+        if excel_path.exists():
+            # Try to initialize the database
+            try:
+                from app.database.excel_db import SurveyDatabase
+                db = SurveyDatabase(str(excel_path))
+                result["database"]["initialization"] = "success"
+                
+                # Try to get questions
+                try:
+                    questions = db.get_all_questions()
+                    result["database"]["questions_count"] = len(questions)
+                    result["database"]["first_question"] = questions[0] if questions else None
+                    
+                    # Try to process test answers
+                    try:
+                        test_answers = ["YES"] * len(questions)
+                        test_result = db.process_basic_results(test_answers)
+                        result["test_processing"]["success"] = True
+                        result["test_processing"]["result_keys"] = list(test_result.keys())
+                        result["test_processing"]["personality_type"] = test_result.get("personality_type", {}).get("role", "Unknown")
+                        result["test_processing"]["industries_count"] = len(test_result.get("recommended_industries", []))
+                        
+                        # Format the test result as it would be returned to the frontend
+                        personality_type = test_result.get("personality_type", {})
+                        personality = {
+                            "type": personality_type.get("code", "XX"),
+                            "description": personality_type.get("who_you_are", ""),
+                            "interpretation": personality_type.get("how_this_combination", ""),
+                            "enjoyment": personality_type.get("what_you_might_enjoy", []),
+                            "your_strength": personality_type.get("your_strength", []),
+                            "iconId": personality_type.get("icon_id", ""),
+                            "riasecScores": test_result.get("category_counts", {})
+                        }
+                        
+                        industries = []
+                        for industry in test_result.get("recommended_industries", []):
+                            industries.append({
+                                "id": industry.get("matching_code", ""),
+                                "name": industry.get("industry", ""),
+                                "overview": industry.get("description", ""),
+                                "trending": industry.get("trending", ""),
+                                "insight": industry.get("insight", ""),
+                                "examplePaths": industry.get("career_path", []),
+                                "education": industry.get("education", "")
+                            })
+                        
+                        result["test_processing"]["formatted_result"] = {
+                            "personality": personality,
+                            "industries": industries
+                        }
+                    except Exception as process_err:
+                        result["test_processing"]["success"] = False
+                        result["test_processing"]["error"] = str(process_err)
+                        result["test_processing"]["traceback"] = traceback.format_exc()
+                except Exception as questions_err:
+                    result["database"]["questions_error"] = str(questions_err)
+                    result["database"]["questions_traceback"] = traceback.format_exc()
+            except Exception as db_err:
+                result["database"]["initialization_error"] = str(db_err)
+                result["database"]["initialization_traceback"] = traceback.format_exc()
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error in debug_survey_test: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
+
+# Add a special debug endpoint to check file system and database access
+@app.get("/api/debug/file-system")
+async def debug_file_system():
+    """Debug endpoint to check file system and database access"""
+    try:
+        result = {
+            "environment": {
+                "current_directory": os.getcwd(),
+                "python_version": sys.version,
+                "platform": sys.platform,
+                "user": os.getenv("USER", "unknown"),
+                "home": os.getenv("HOME", "unknown"),
+                "path": os.getenv("PATH", "unknown"),
+            },
+            "file_system": {},
+            "database_checks": {}
+        }
+        
+        # Check various paths
+        paths_to_check = [
+            "/",
+            "/app",
+            "/app/database",
+            "/app/database/Database.xlsx",
+            "app",
+            "app/database",
+            "app/database/Database.xlsx",
+            "./app",
+            "./app/database",
+            "./app/database/Database.xlsx",
+            "../app",
+            "../app/database",
+            "../app/database/Database.xlsx",
+        ]
+        
+        for path in paths_to_check:
+            p = Path(path)
+            result["file_system"][path] = {
+                "exists": p.exists(),
+                "is_file": p.is_file() if p.exists() else None,
+                "is_dir": p.is_dir() if p.exists() else None,
+                "absolute_path": str(p.absolute()),
+            }
+            
+            # If it's a directory, list contents
+            if p.exists() and p.is_dir():
+                try:
+                    result["file_system"][path]["contents"] = [str(f.name) for f in p.glob("*")]
+                except Exception as e:
+                    result["file_system"][path]["error"] = str(e)
+        
+        # Try to read the database file directly
+        excel_path = Path("/app/database/Database.xlsx")
+        if excel_path.exists():
+            try:
+                # Get file stats
+                stats = os.stat(excel_path)
+                result["database_checks"]["file_stats"] = {
+                    "size": stats.st_size,
+                    "mode": stats.st_mode,
+                    "uid": stats.st_uid,
+                    "gid": stats.st_gid,
+                    "atime": stats.st_atime,
+                    "mtime": stats.st_mtime,
+                    "ctime": stats.st_ctime,
+                }
+                
+                # Try to read the file
+                with open(excel_path, "rb") as f:
+                    first_bytes = f.read(100)
+                    result["database_checks"]["first_bytes_hex"] = first_bytes.hex()
+                    result["database_checks"]["can_read"] = True
+                
+                # Try to initialize the database
+                try:
+                    from app.database.excel_db import SurveyDatabase
+                    db = SurveyDatabase(str(excel_path))
+                    result["database_checks"]["initialization"] = "success"
+                    
+                    # Try to get questions
+                    questions = db.get_all_questions()
+                    result["database_checks"]["questions_count"] = len(questions)
+                    
+                    # Try a simple test
+                    test_answers = ["YES"] * len(questions)
+                    test_result = db.process_basic_results(test_answers)
+                    result["database_checks"]["test_result_keys"] = list(test_result.keys())
+                except Exception as db_err:
+                    result["database_checks"]["initialization_error"] = str(db_err)
+                    result["database_checks"]["initialization_traceback"] = traceback.format_exc()
+            except Exception as e:
+                result["database_checks"]["error"] = str(e)
+                result["database_checks"]["traceback"] = traceback.format_exc()
+        else:
+            result["database_checks"]["file_exists"] = False
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error in debug_file_system: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
+
+# Add a direct test endpoint that will always return a valid result
+@app.post("/api/direct-test")
+async def direct_test(survey_data: SurveyRequest = None):
+    """Direct test endpoint that will always return a valid result"""
+    logger.info("Direct test endpoint called")
+    return {
+        "personality": {
+            "type": "RI",
+            "description": "You are a logical and analytical thinker with a strong interest in understanding how things work.",
+            "interpretation": "Your combination of Realistic and Investigative traits suggests you enjoy solving practical problems through analysis and research.",
+            "enjoyment": [
+                "Working with technical systems",
+                "Analyzing complex problems",
+                "Learning new technical skills"
+            ],
+            "your_strength": [
+                "Logical thinking",
+                "Problem-solving",
+                "Technical aptitude"
+            ],
+            "iconId": "1",
+            "riasecScores": {"R": 5, "I": 4, "A": 2, "S": 1, "E": 3, "C": 2}
+        },
+        "industries": [{
+            "id": "RIA",
+            "name": "Engineering",
+            "overview": "Engineering involves applying scientific and mathematical principles to design and build systems, structures, and products.",
+            "trending": "Software engineering, biomedical engineering, and renewable energy engineering are rapidly growing fields.",
+            "insight": "Engineers are in high demand across various sectors, with opportunities for specialization and advancement.",
+            "examplePaths": [
+                "Software Engineer",
+                "Mechanical Engineer",
+                "Civil Engineer"
+            ],
+            "education": "Bachelor's degree in engineering or related field, with professional certification often required."
+        }]
+    }
 
 if __name__ == "__main__":
     import uvicorn
