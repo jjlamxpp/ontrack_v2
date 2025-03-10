@@ -126,7 +126,11 @@ export function SurveyPage() {
       setError(null);
       
       try {
-        const result = await submitSurveyAndGetAnalysis(answers);
+        // Convert all answers to uppercase for consistency
+        const normalizedAnswers = answers.map(answer => answer.toUpperCase());
+        console.log('Normalized answers:', normalizedAnswers);
+        
+        const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
         console.log('Survey submitted successfully, received analysis result:', result);
         
         // Validate the result structure
