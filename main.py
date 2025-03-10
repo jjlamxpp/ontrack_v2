@@ -16,7 +16,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from app.database.excel_db import SurveyDatabase
+from excel_db import SurveyDatabase  # Import from local file
 
 # Add these Pydantic models for your API
 class Question(BaseModel):
@@ -570,22 +570,51 @@ async def submit_survey(survey_data: SurveyRequest):
         
         # Try to process with the database
         try:
-            # Initialize the database
+            # Initialize the database with a relative path that works in both local and deployed environments
+            # First try the absolute path for deployed environment
             db_path = "/app/database/Database.xlsx"
-            logger.info(f"Initializing database with path: {db_path}")
+            
+            # If that doesn't exist, try the relative path for local development
+            if not os.path.exists(db_path):
+                logger.info(f"Database not found at {db_path}, trying relative path")
+                db_path = "app/database/Database.xlsx"
+                
+                # If that doesn't exist either, try another common location
+                if not os.path.exists(db_path):
+                    logger.info(f"Database not found at {db_path}, trying another path")
+                    db_path = "database/Database.xlsx"
+                    
+                    # If that doesn't exist either, try the current directory
+                    if not os.path.exists(db_path):
+                        logger.info(f"Database not found at {db_path}, trying current directory")
+                        db_path = "Database.xlsx"
+            
+            logger.info(f"Using database path: {db_path}")
             
             # Check if the file exists
             if not os.path.exists(db_path):
                 logger.error(f"Database file not found at {db_path}")
                 # List files in the directory to help debug
-                parent_dir = os.path.dirname(db_path)
-                if os.path.exists(parent_dir):
-                    logger.info(f"Files in {parent_dir}: {os.listdir(parent_dir)}")
-                else:
-                    logger.error(f"Parent directory {parent_dir} does not exist")
+                current_dir = os.getcwd()
+                logger.info(f"Current working directory: {current_dir}")
+                logger.info(f"Files in current directory: {os.listdir(current_dir)}")
                 
-                # Return fallback result
-                return get_fallback_result()
+                # Try to find the Excel file in the current directory or subdirectories
+                excel_files = []
+                for root, dirs, files in os.walk(current_dir):
+                    for file in files:
+                        if file.endswith('.xlsx'):
+                            excel_files.append(os.path.join(root, file))
+                
+                if excel_files:
+                    logger.info(f"Found Excel files: {excel_files}")
+                    # Use the first Excel file found
+                    db_path = excel_files[0]
+                    logger.info(f"Using found Excel file: {db_path}")
+                else:
+                    logger.error("No Excel files found in the directory tree")
+                    # Return fallback result
+                    return get_fallback_result()
             
             # Initialize the database
             db = SurveyDatabase(excel_path=db_path)
@@ -1127,6 +1156,42 @@ async def health_check():
         return {
             "status": "error",
             "message": str(e)
+        }
+
+@app.get("/api/debug/test-survey-submission")
+async def test_survey_submission():
+    """
+    Test endpoint to verify that the survey submission works.
+    """
+    try:
+        # Create a test survey response with 'yes' answers
+        test_answers = ["yes"] * 42 # 20 yes answers
+        
+        # Create a SurveyRequest object
+        survey_data = SurveyRequest(answers=test_answers)
+        
+        # Call the submit_survey function
+        result = await submit_survey(survey_data)
+        
+        # Return the result along with debug information
+        return {
+            "status": "success",
+            "message": "Survey submission test completed successfully",
+            "test_answers": test_answers,
+            "result": result,
+            "database_paths_tried": [
+                "/app/database/Database.xlsx",
+                "app/database/Database.xlsx",
+                "database/Database.xlsx",
+                "Database.xlsx"
+            ]
+        }
+    except Exception as e:
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"Survey submission test failed: {str(e)}",
+            "error_details": traceback.format_exc()
         }
 
 if __name__ == "__main__":
