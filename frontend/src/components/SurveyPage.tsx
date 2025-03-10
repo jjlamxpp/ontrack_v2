@@ -12,6 +12,7 @@ export function SurveyPage() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [testFallbackVisible, setTestFallbackVisible] = useState(false);
   const apiConfig = useContext(ApiContext);
   
   // Get current page number with validation
@@ -133,6 +134,8 @@ export function SurveyPage() {
         // Add a delay to ensure the loading state is visible
         await new Promise(resolve => setTimeout(resolve, 500));
         
+        // Submit the survey and get the analysis
+        console.log('Calling submitSurveyAndGetAnalysis...');
         const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
         console.log('Survey submitted successfully, received analysis result:', result);
         
@@ -144,11 +147,13 @@ export function SurveyPage() {
         
         // Store the result in localStorage
         localStorage.setItem('analysisResult', JSON.stringify(result));
+        console.log('Analysis result stored in localStorage');
         
         // Clear survey answers after successful submission
         localStorage.removeItem('surveyAnswers');
         
         // Navigate to result page
+        console.log('Navigating to result page...');
         navigate('/result');
       } catch (submitError) {
         console.error('Error during survey submission:', submitError);
@@ -167,10 +172,15 @@ export function SurveyPage() {
         } else {
           setError('An unknown error occurred. Please try again.');
         }
+        
+        // Add a button to try the test submission as fallback
+        setTestFallbackVisible(true);
       }
     } catch (err) {
       console.error('Unexpected error in handleSubmit:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.');
+      // Add a button to try the test submission as fallback
+      setTestFallbackVisible(true);
     } finally {
       setLoading(false);
     }
@@ -255,12 +265,23 @@ export function SurveyPage() {
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-xl text-red-500 mb-4">Error: {error}</div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
-          >
-            Retry
-          </button>
+          <div className="flex gap-4 justify-center">
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+            
+            {testFallbackVisible && (
+              <button 
+                onClick={testSurveySubmission} 
+                className="px-4 py-2 bg-purple-500 rounded hover:bg-purple-600"
+              >
+                Use Test Data
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
