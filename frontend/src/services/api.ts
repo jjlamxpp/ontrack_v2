@@ -50,7 +50,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         
         // Add a timeout to the fetch request
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
         
         try {
             const response = await fetch(url, {
@@ -64,31 +64,45 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             
             clearTimeout(timeoutId);
             
+            // Log the response status
+            console.log('Survey submission response status:', response.status);
+            
             if (!response.ok) {
                 let errorMessage = `Submitting survey failed with status ${response.status}`;
                 try {
                     const errorText = await response.text();
-                    console.error(`Error response for submitting survey:`, errorText);
+                    console.error('Error response for submitting survey:', errorText);
                     errorMessage += `: ${errorText}`;
                 } catch (e) {
-                    console.error(`Could not parse error response for submitting survey`);
+                    console.error('Could not parse error response for submitting survey');
                 }
                 throw new Error(errorMessage);
             }
             
-            const data = await response.json();
-            console.log('Analysis result received:', data);
-            
-            // Validate the result structure
-            if (!data.personality || !data.industries) {
-                console.error('Invalid result structure:', data);
-                throw new Error('Invalid result structure received from API');
+            // Try to parse the response as JSON
+            try {
+                const data = await response.json();
+                console.log('Analysis result received:', data);
+                
+                // Validate the result structure
+                if (!data || typeof data !== 'object') {
+                    console.error('Invalid result format:', data);
+                    throw new Error('Invalid result format received from API');
+                }
+                
+                if (!data.personality || !data.industries) {
+                    console.error('Missing required fields in result:', data);
+                    throw new Error('Missing required fields in result from API');
+                }
+                
+                return data;
+            } catch (jsonError) {
+                console.error('Error parsing JSON response:', jsonError);
+                throw new Error('Failed to parse API response as JSON');
             }
-            
-            return data;
         } catch (fetchError: any) {
             if (fetchError.name === 'AbortError') {
-                console.error('Request timed out after 30 seconds');
+                console.error('Request timed out after 60 seconds');
                 throw new Error('Request timed out. Please try again.');
             }
             throw fetchError;
