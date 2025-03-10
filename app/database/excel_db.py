@@ -277,13 +277,29 @@ class SurveyDatabase:
             # Log the answers and questions for debugging
             print(f"Processing {len(answers)} answers for {len(questions)} questions")
             
+            # Ensure we have questions to process
+            if not questions:
+                print("Warning: No questions found in the database")
+                raise ValueError("No questions found in the database")
+            
+            # Ensure answers is a list of strings
+            if not isinstance(answers, list):
+                print(f"Error: answers is not a list, it's a {type(answers)}")
+                raise ValueError(f"Expected answers to be a list, got {type(answers)}")
+            
+            # Process each answer
             for q_idx, answer in enumerate(answers):
                 if q_idx < len(questions):
                     question = questions[q_idx]
                     category = question.get('category', '')
                     
+                    # Validate the answer
+                    if not isinstance(answer, str):
+                        print(f"Warning: Answer at index {q_idx} is not a string: {answer}")
+                        continue
+                    
                     # Only count 'Yes' answers
-                    if answer.lower() == 'yes' and category in category_counts:
+                    if answer.upper() in ['YES', 'Y'] and category in category_counts:
                         category_counts[category] += 1
                         print(f"Question {q_idx+1} (Category {category}): {answer} -> Count: {category_counts[category]}")
 
@@ -348,15 +364,8 @@ class SurveyDatabase:
             import traceback
             print(f"Error in process_basic_results: {str(e)}")
             print(traceback.format_exc())
-            # Return a minimal result to avoid breaking the frontend
-            return {
-                "category_counts": {'R': 0, 'I': 0, 'A': 0, 'S': 0, 'E': 0, 'C': 0},
-                "three_digit_codes": ["RIA"],
-                "two_digit_codes": ["RI"],
-                "primary_code": 'R',
-                "personality_type": {"role": "Default Role", "who_you_are": "Default description"},
-                "recommended_industries": []
-            }
+            # Re-raise the exception to be handled by the caller
+            raise
 
     def _generate_code(self, max_cats: List[str], second_cats: List[str], third_cats: List[str]) -> List[str]:
         """Generate three-digit Holland code combinations"""
