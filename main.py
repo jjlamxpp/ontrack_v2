@@ -117,21 +117,38 @@ if app_static_dir.exists() and app_static_dir != static_dir:
 # Add middleware for SPA routing
 class SPAMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Skip API routes - let them be handled normally
+        if request.url.path.startswith("/api/"):
+            logger.info(f"API route: {request.url.path}, handling normally")
+            return await call_next(request)
+        
+        # Skip static file routes
+        if request.url.path.startswith("/static/") or request.url.path.startswith("/assets/"):
+            logger.info(f"Static route: {request.url.path}, handling normally")
+            return await call_next(request)
+        
+        # For all other routes, try to serve the normal response first
         response = await call_next(request)
         
-        # If the response is a 404 and the path doesn't start with /api
-        if response.status_code == 404 and not request.url.path.startswith("/api"):
-            logger.info(f"404 for non-API route: {request.url.path}, serving index.html")
+        # If the response is a 404, serve index.html instead
+        if response.status_code == 404:
+            logger.info(f"404 for route: {request.url.path}, serving index.html")
             
-            # Try to find index.html
-            index_path = frontend_dir / "index.html"
-            if index_path.exists():
-                return FileResponse(index_path)
+            # Try to find index.html in multiple possible locations
+            possible_index_paths = [
+                frontend_build_dir / "index.html",
+                frontend_dir / "index.html",
+                BASE_DIR / "frontend" / "dist" / "index.html",
+                BASE_DIR / "frontend" / "index.html",
+                BASE_DIR / "static" / "index.html"
+            ]
             
-            # Try build directory
-            index_path = frontend_build_dir / "index.html"
-            if index_path.exists():
-                return FileResponse(index_path)
+            for index_path in possible_index_paths:
+                if index_path.exists():
+                    logger.info(f"Serving index.html from {index_path}")
+                    return FileResponse(index_path)
+            
+            logger.warning("Could not find index.html in any expected location")
         
         return response
 
@@ -142,7 +159,13 @@ app.add_middleware(SPAMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development - restrict this in production
+    allow_origins=[
+        "https://ontrack-d4m7j.ondigitalocean.app",
+        "http://ontrack-d4m7j.ondigitalocean.app",
+        "https://www.ontrack-d4m7j.ondigitalocean.app",
+        "http://localhost:5173",  # For local development
+        "*"  # Allow all origins for now - restrict this in production later
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods including POST
     allow_headers=["*"],
@@ -495,6 +518,7 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
         logger.info(f"POST request received at /api/survey/submit")
         logger.info(f"Request headers: {request.headers}")
         logger.info(f"Processing survey with {len(survey_data.answers)} answers")
+        logger.info(f"Survey answers: {survey_data.answers}")
         
         # Initialize the database
         try:
@@ -502,7 +526,8 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
             possible_paths = [
                 BASE_DIR / "app" / "database" / "Database.xlsx",
                 BASE_DIR / "Database.xlsx",
-                Path("/app/app/database/Database.xlsx")
+                Path("/app/app/database/Database.xlsx"),
+                Path("app/database/Database.xlsx")  # Relative path
             ]
             
             db = None
@@ -510,18 +535,28 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 try:
                     logger.info(f"Trying to load database from: {path}")
                     if path.exists():
+                        logger.info(f"Database file exists at: {path}")
                         db = SurveyDatabase(str(path))
                         logger.info(f"Successfully loaded database from: {path}")
                         break
+                    else:
+                        logger.warning(f"Database file does not exist at: {path}")
                 except Exception as db_err:
                     logger.warning(f"Failed to load database from {path}: {str(db_err)}")
+                    logger.warning(traceback.format_exc())
                     continue
             
             if db is None:
+                # List all files in the app/database directory to help debug
+                database_dir = BASE_DIR / "app" / "database"
+                if database_dir.exists():
+                    logger.error(f"Files in {database_dir}: {list(database_dir.glob('*'))}")
+                
                 logger.error("Could not find Database.xlsx in any expected location")
                 raise HTTPException(status_code=500, detail="Database file not found")
             
             # Process the survey answers
+            logger.info("Processing survey answers with database")
             result = db.process_basic_results(survey_data.answers)
             logger.info(f"Processed survey results: {result.keys()}")
             
@@ -614,20 +649,24 @@ async def options_route(full_path: str):
 async def serve_spa_routes(full_path: str):
     """Serve the frontend for any path not matched by API routes"""
     # Log the requested path
-    logger.info(f"Serving SPA route: /{full_path}")
+    logger.info(f"Catch-all route handling: /{full_path}")
     
-    # Skip API routes
+    # Skip API routes - they should have been handled by their own endpoints
     if full_path.startswith("api/"):
         logger.warning(f"API route not found: /{full_path}")
-        return {"error": "API endpoint not found"}
+        return JSONResponse(
+            status_code=404,
+            content={"error": "API endpoint not found"}
+        )
     
     # For all other paths, serve index.html to support SPA routing
     # Try multiple possible locations for index.html
     possible_index_paths = [
-        frontend_dir / "index.html",
         frontend_build_dir / "index.html",
+        frontend_dir / "index.html",
+        BASE_DIR / "frontend" / "dist" / "index.html",
         BASE_DIR / "frontend" / "index.html",
-        BASE_DIR / "frontend" / "dist" / "index.html"
+        BASE_DIR / "static" / "index.html"
     ]
     
     for index_path in possible_index_paths:
