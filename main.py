@@ -655,6 +655,15 @@ async def submit_survey(survey_data: SurveyRequest):
         logger.info(f"Received survey submission with {len(survey_data.answers)} answers")
         logger.info(f"Answers: {survey_data.answers}")
         
+        # Log the answer types to help diagnose issues
+        answer_types = [f"{type(a).__name__}" for a in survey_data.answers]
+        logger.info(f"Answer types: {answer_types}")
+        
+        # Check for non-string answers
+        non_string_answers = [i for i, a in enumerate(survey_data.answers) if not isinstance(a, str)]
+        if non_string_answers:
+            logger.warning(f"Non-string answers found at indices: {non_string_answers}")
+        
         # Try to process with the database
         try:
             # Initialize the database with a relative path that works in both local and deployed environments
@@ -1278,6 +1287,40 @@ async def test_survey_submission():
         return {
             "status": "error",
             "message": f"Survey submission test failed: {str(e)}",
+            "error_details": traceback.format_exc()
+        }
+
+@app.get("/api/debug/test-yes-no-submission")
+async def test_yes_no_submission():
+    """
+    Test endpoint to verify that the survey submission works with yes/no answers.
+    """
+    try:
+        # Create a test survey response with alternating 'YES' and 'NO' answers
+        test_answers = []
+        for i in range(20):  # 20 questions
+            test_answers.append("YES" if i % 2 == 0 else "NO")
+        
+        logger.info(f"Test answers: {test_answers}")
+        
+        # Create a SurveyRequest object
+        survey_data = SurveyRequest(answers=test_answers)
+        
+        # Call the submit_survey function
+        result = await submit_survey(survey_data)
+        
+        # Return the result along with debug information
+        return {
+            "status": "success",
+            "message": "Yes/No survey submission test completed successfully",
+            "test_answers": test_answers,
+            "result": result
+        }
+    except Exception as e:
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"Yes/No survey submission test failed: {str(e)}",
             "error_details": traceback.format_exc()
         }
 
