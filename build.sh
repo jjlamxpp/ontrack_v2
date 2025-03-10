@@ -1,8 +1,30 @@
 #!/bin/bash
 set -e
 
-echo "Installing Python dependencies..."
+echo "Build script started"
+
+# Create necessary directories
+mkdir -p app/database
+mkdir -p static
+
+# Copy excel_db.py to multiple locations to ensure it's found
+echo "Copying excel_db.py to multiple locations"
+cp excel_db.py app/database/excel_db.py
+cp excel_db.py /app/excel_db.py 2>/dev/null || echo "Could not copy to /app/ (this is normal during local builds)"
+
+# Check if Database.xlsx exists and copy it to app/database
+if [ -f "Database.xlsx" ]; then
+    echo "Copying Database.xlsx to app/database"
+    cp Database.xlsx app/database/
+fi
+
+# Install dependencies
+echo "Installing dependencies"
 pip install -r requirements.txt
+
+# Start the application
+echo "Starting the application"
+exec python main.py
 
 echo "Installing frontend dependencies..."
 cd frontend
@@ -15,12 +37,6 @@ echo "Creating necessary directories..."
 cd ..
 mkdir -p app/static
 cp -r frontend/dist/* app/static/
-
-echo "Ensuring database directory exists..."
-mkdir -p app/database
-if [ -f "Database.xlsx" ]; then
-    cp Database.xlsx app/database/
-fi
 
 echo "Ensuring icon directories exist..."
 mkdir -p app/static/icon
