@@ -100,168 +100,387 @@ class SurveyDatabase:
 
     def get_all_questions(self):
         """Get all questions from the database"""
-        if self.df is None:
-            print("Database not properly initialized")
-            return []
-        
-        questions = []
         try:
+            questions = []
+            
+            # Check if the DataFrame is loaded
+            if self.df is None or self.df.empty:
+                print("Warning: Question pool DataFrame is empty or None")
+                return []
+            
+            # Log the columns in the DataFrame
+            print(f"Question pool columns: {self.df.columns.tolist()}")
+            
+            # Check if required columns exist
+            if 'questions:' not in self.df.columns:
+                print("Warning: 'questions:' column not found in DataFrame")
+                # Try to find a similar column
+                question_cols = [col for col in self.df.columns if 'question' in col.lower()]
+                if question_cols:
+                    print(f"Found alternative question column: {question_cols[0]}")
+                    question_col = question_cols[0]
+                else:
+                    print("No question column found")
+                    return []
+            else:
+                question_col = 'questions:'
+            
+            # Check if category column exists
+            if 'category' not in self.df.columns:
+                print("Warning: 'category' column not found in DataFrame")
+                # Try to find a similar column
+                category_cols = [col for col in self.df.columns if 'category' in col.lower() or 'type' in col.lower()]
+                if category_cols:
+                    print(f"Found alternative category column: {category_cols[0]}")
+                    category_col = category_cols[0]
+                else:
+                    print("No category column found, using default category")
+                    category_col = None
+            else:
+                category_col = 'category'
+            
+            # Process each row in the DataFrame
             for index, row in self.df.iterrows():
-                if pd.isna(row['questions:']) or pd.isna(row['category']):
+                question_text = row.get(question_col, '')
+                
+                # Skip empty questions
+                if not question_text or pd.isna(question_text):
                     continue
                 
-                raw_question = str(row['questions:'])
-                if "- question:" in raw_question:
-                    question_text = raw_question.split("- question:")[1].strip().strip('"')
-                else:
-                    question_text = raw_question.strip().strip('"')
+                # Parse the question text
+                if isinstance(question_text, str):
+                    # Try to extract the actual question text
+                    import re
+                    match = re.search(r'"([^"]*)"', question_text)
+                    if match:
+                        question_text = match.group(1)
+                    else:
+                        # Try with single quotes if double quotes not found
+                        match = re.search(r"'([^']*)'", question_text)
+                        if match:
+                            question_text = match.group(1)
+                        else:
+                            # If no quotes found, try to extract after "question:"
+                            parts = question_text.split("question:")
+                            if len(parts) > 1:
+                                question_text = parts[1].strip().strip('"').strip("'")
                 
+                # Get category
+                category = row.get(category_col, 'general') if category_col else 'general'
+                if pd.isna(category):
+                    category = 'general'
+                
+                # Create question object
                 question = {
-                    'id': index + 1,
-                    'question_text': question_text,
-                    'category': row['category'],
-                    'options': ["Yes", "No"]
+                    "id": int(index + 1),  # Use row index + 1 as ID
+                    "question_text": question_text,
+                    "category": category,
+                    "options": ["Yes", "No"]
                 }
+                
                 questions.append(question)
+            
+            print(f"Loaded {len(questions)} questions from database")
+            return questions
+            
         except Exception as e:
-            print(f"Error processing questions: {str(e)}")
+            print(f"Error in get_all_questions: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return []
-        
-        return questions
 
     def _get_two_digit_mapping(self, two_digit_code: str) -> Dict:
-        """Get description for two-digit code"""
-        if self.two_digit_df is None:
-            print("Two digit DataFrame is None")
-            return {}
-        
+        """Get the mapping for a two-digit code"""
         try:
-            # Debug print
-            print(f"Looking for two digit code: {two_digit_code}")
-            print("Available codes:", self.two_digit_df['Two digit code'].unique().tolist())
+            print(f"Looking up two-digit code: {two_digit_code}")
             
-            # Find the row where the "Two digit code" column matches
-            matching_row = self.two_digit_df[self.two_digit_df['Two digit code'] == two_digit_code]
+            # Ensure we have a valid code
+            if not two_digit_code or len(two_digit_code) != 2:
+                print(f"Warning: Invalid two-digit code: {two_digit_code}")
+                return self._get_default_personality()
             
-            if matching_row.empty:
-                print(f"No matching row found for code: {two_digit_code}")
-                return {}
+            # Try to find the exact code
+            for _, row in self.two_digit_df.iterrows():
+                # Get the code from the row, handling different column names
+                code = None
+                for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
+                    if col_name in self.two_digit_df.columns:
+                        code = row.get(col_name)
+                        if code:
+                            break
+                
+                if not code:
+                    continue
+                
+                # Normalize the code for comparison
+                if isinstance(code, str) and code.strip() == two_digit_code:
+                    print(f"Found exact match for code: {two_digit_code}")
+                    return self._extract_personality_from_row(row)
             
-            row = matching_row.iloc[0]
+            # If no exact match, try to find a code with the same characters in any order
+            for _, row in self.two_digit_df.iterrows():
+                code = None
+                for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
+                    if col_name in self.two_digit_df.columns:
+                        code = row.get(col_name)
+                        if code:
+                            break
+                
+                if not code:
+                    continue
+                
+                # Check if the code contains the same characters (in any order)
+                if isinstance(code, str) and sorted(code.strip()) == sorted(two_digit_code):
+                    print(f"Found match with same characters for code: {two_digit_code}")
+                    return self._extract_personality_from_row(row)
             
-            # Convert row to dict and ensure all numeric values are Python integers
-            row_dict = {k: int(v) if isinstance(v, np.integer) else v for k, v in row.to_dict().items()}
-            print(f"Found matching row: {row_dict}")
-            
-            # Handle the 'How This Combination Interpret' column with space at the end
-            how_this_combination = row_dict.get('How This Combination Interpret ', '')  # Note the space at the end
-            if not how_this_combination:  # Try without space if first attempt is empty
-                how_this_combination = row_dict.get('How This Combination Interpret', '')
-            
-            # Split the fields that contain "//" into lists
-            what_you_might_enjoy = [
-                item.strip() 
-                for item in str(row_dict.get('What You Might Enjoy', '')).split("//")
-                if item.strip()
-            ]
-            
-            your_strength = [
-                item.strip() 
-                for item in str(row_dict.get('Your strength', '')).split("//")
-                if item.strip()
-            ]
-            
-            result = {
-                "code": two_digit_code,
-                "role": row_dict.get('Role', ''),
-                "icon_id": str(row_dict.get('icon_id', '')),
-                "who_you_are": row_dict.get('Who you are?', ''),
-                "how_this_combination": how_this_combination,
-                "what_you_might_enjoy": what_you_might_enjoy,
-                "your_strength": your_strength
-            }
-            
-            # Debug print
-            print("Returning result:", result)
-            return result
+            # If still no match, return a default personality
+            print(f"No match found for code: {two_digit_code}, using default")
+            return self._get_default_personality()
             
         except Exception as e:
-            print(f"Error getting two-digit mapping: {e}")
+            print(f"Error in _get_two_digit_mapping: {str(e)}")
             import traceback
-            traceback.print_exc()
-            return {}
+            print(traceback.format_exc())
+            return self._get_default_personality()
+    
+    def _extract_personality_from_row(self, row) -> Dict:
+        """Extract personality information from a row in the two_digit_df"""
+        try:
+            # Initialize with default values
+            personality = {
+                "code": "XX",
+                "role": "Default Role",
+                "who_you_are": "Default description",
+                "how_this_combination": "Default interpretation",
+                "what_you_might_enjoy": [],
+                "your_strength": [],
+                "icon_id": "1"
+            }
+            
+            # Try to extract the code
+            for col_name in ['Two digit code', 'Two Digit Code', 'Two-digit code']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    personality["code"] = str(row.get(col_name)).strip()
+                    break
+            
+            # Try to extract the role
+            for col_name in ['Role', 'role']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    personality["role"] = str(row.get(col_name))
+                    break
+            
+            # Try to extract the icon ID
+            for col_name in ['icon_id', 'Icon ID', 'Icon id']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    personality["icon_id"] = str(row.get(col_name))
+                    break
+            
+            # Try to extract the description
+            for col_name in ['Who you are?', 'Who You Are', 'Who you are']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    personality["who_you_are"] = str(row.get(col_name))
+                    break
+            
+            # Try to extract the interpretation
+            for col_name in ['How This Combination Interpret', 'How This Combination Interprets']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    personality["how_this_combination"] = str(row.get(col_name))
+                    break
+            
+            # Try to extract what you might enjoy
+            for col_name in ['What You Might Enjoy', 'What you might enjoy']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    value = row.get(col_name)
+                    if isinstance(value, str):
+                        # Split by newlines or bullet points
+                        items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
+                        personality["what_you_might_enjoy"] = items
+                    break
+            
+            # Try to extract your strengths
+            for col_name in ['Your strength', 'Your Strength', 'Your strengths']:
+                if col_name in self.two_digit_df.columns and row.get(col_name):
+                    value = row.get(col_name)
+                    if isinstance(value, str):
+                        # Split by newlines or bullet points
+                        items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
+                        personality["your_strength"] = items
+                    break
+            
+            return personality
+            
+        except Exception as e:
+            print(f"Error extracting personality from row: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return self._get_default_personality()
+    
+    def _get_default_personality(self) -> Dict:
+        """Return a default personality when no match is found"""
+        return {
+            "code": "XX",
+            "role": "Explorer",
+            "who_you_are": "You are a versatile individual with a unique combination of interests and skills.",
+            "how_this_combination": "Your profile suggests you have diverse interests that allow you to adapt to various situations.",
+            "what_you_might_enjoy": [
+                "Exploring different fields and interests",
+                "Learning new skills",
+                "Adapting to changing environments"
+            ],
+            "your_strength": [
+                "Versatility",
+                "Adaptability",
+                "Curiosity"
+            ],
+            "icon_id": "1"
+        }
 
     def _get_industry_insights(self, three_digit_codes: List[str]) -> List[Dict]:
         """Get industry insights for three-digit codes"""
-        if self.industry_df is None:
-            print("Industry DataFrame is None")
-            return []
-        
-        insights = []
         try:
-            # Debug print
-            print(f"Looking for three digit codes: {three_digit_codes}")
-            mapping_column = None
+            print(f"Looking up industry insights for codes: {three_digit_codes}")
             
-            # Find the correct mapping column name
-            possible_columns = ['Three digital', 'Three Digital', 'Mapping Code']
-            for col in possible_columns:
-                if col in self.industry_df.columns:
-                    mapping_column = col
-                    break
-                
-            if not mapping_column:
-                print("Could not find mapping column. Available columns:", self.industry_df.columns)
-                return []
+            if not three_digit_codes:
+                print("Warning: No three-digit codes provided")
+                return [self._get_default_industry()]
             
-            print(f"Using mapping column: {mapping_column}")
+            # Initialize results list
+            results = []
             
-            # Check each code against the mapping column
+            # Try to find matching industries for each code
             for code in three_digit_codes:
-                # Iterate through each row in the DataFrame
-                for _, row in self.industry_df.iterrows():
-                    # Get the mapping codes string and split it into individual codes
-                    mapping_codes_str = str(row[mapping_column])
-                    mapping_codes = [c.strip() for c in mapping_codes_str.split(',')]
-                    
-                    # Check if the current code exists in the mapping codes
-                    if code in mapping_codes:
-                        print(f"Found match for code {code} in row with codes: {mapping_codes}")
-                        
-                        # Convert row to dict and handle NaN values
-                        row_dict = {k: ('' if pd.isna(v) else v) for k, v in row.to_dict().items()}
-                        
-                        # Split fields that contain "//" into lists
-                        career_paths = [
-                            path.strip() 
-                            for path in str(row_dict.get('Example Role', '')).split("//")
-                            if path.strip()
-                        ]
-                        
-                        insight = {
-                            "industry": row_dict.get('Industry', ''),
-                            "description": row_dict.get('Overview', ''),
-                            "trending": row_dict.get('Trending', ''),
-                            "insight": row_dict.get('Insight', ''),
-                            "skills_required": row_dict.get('Required Skills', ''),
-                            "career_path": career_paths,
-                            "education": row_dict.get('Jupas', ''),
-                            "matching_code": code  # Add the matching code for reference
-                        }
-                        
-                        # Remove any empty values
-                        insight = {k: v for k, v in insight.items() if v}
-                        
-                        if any(insight.values()):  # Only append if there's at least one non-empty value
-                            insights.append(insight)
-                            print(f"Added insight for code {code}: {insight}")
+                # Ensure we have a valid code
+                if not code or len(code) != 3:
+                    print(f"Warning: Invalid three-digit code: {code}")
+                    continue
                 
-        except Exception as e:
-            print(f"Error getting industry insights: {e}")
-            import traceback
-            traceback.print_exc()
+                # Try to find exact matches first
+                found_match = False
+                for _, row in self.industry_df.iterrows():
+                    # Get the matching code from the row
+                    matching_code = row.get('Matching code', '')
+                    
+                    if not isinstance(matching_code, str):
+                        continue
+                    
+                    # Check for exact match
+                    if matching_code.strip() == code:
+                        print(f"Found exact match for code: {code}")
+                        industry_info = self._extract_industry_from_row(row, code)
+                        results.append(industry_info)
+                        found_match = True
+                
+                # If no exact match, try to find partial matches
+                if not found_match:
+                    for _, row in self.industry_df.iterrows():
+                        matching_code = row.get('Matching code', '')
+                        
+                        if not isinstance(matching_code, str):
+                            continue
+                        
+                        # Check if the first two characters match
+                        if len(matching_code) >= 2 and len(code) >= 2 and matching_code[:2] == code[:2]:
+                            print(f"Found partial match for code: {code} with {matching_code}")
+                            industry_info = self._extract_industry_from_row(row, code)
+                            results.append(industry_info)
+                            found_match = True
+                            break
+                
+                # If still no match, try to find any match with the first character
+                if not found_match:
+                    for _, row in self.industry_df.iterrows():
+                        matching_code = row.get('Matching code', '')
+                        
+                        if not isinstance(matching_code, str):
+                            continue
+                        
+                        # Check if the first character matches
+                        if len(matching_code) >= 1 and len(code) >= 1 and matching_code[0] == code[0]:
+                            print(f"Found first-character match for code: {code} with {matching_code}")
+                            industry_info = self._extract_industry_from_row(row, code)
+                            results.append(industry_info)
+                            found_match = True
+                            break
             
-        return insights
+            # If no matches found, return a default industry
+            if not results:
+                print("No industry matches found, using default")
+                results.append(self._get_default_industry())
+            
+            return results
+            
+        except Exception as e:
+            print(f"Error in _get_industry_insights: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return [self._get_default_industry()]
+    
+    def _extract_industry_from_row(self, row, matching_code: str) -> Dict:
+        """Extract industry information from a row in the industry_df"""
+        try:
+            # Initialize with default values
+            industry = {
+                "matching_code": matching_code,
+                "industry": "Default Industry",
+                "description": "Default industry description",
+                "trending": "Default trending information",
+                "insight": "Default industry insight",
+                "career_path": [],
+                "education": ""
+            }
+            
+            # Extract industry name
+            if 'Industry' in self.industry_df.columns and row.get('Industry'):
+                industry["industry"] = str(row.get('Industry'))
+            
+            # Extract description
+            if 'Description' in self.industry_df.columns and row.get('Description'):
+                industry["description"] = str(row.get('Description'))
+            
+            # Extract trending information
+            if 'Trending' in self.industry_df.columns and row.get('Trending'):
+                industry["trending"] = str(row.get('Trending'))
+            
+            # Extract insight
+            if 'Insight' in self.industry_df.columns and row.get('Insight'):
+                industry["insight"] = str(row.get('Insight'))
+            
+            # Extract career path
+            if 'Career path' in self.industry_df.columns and row.get('Career path'):
+                value = row.get('Career path')
+                if isinstance(value, str):
+                    # Split by newlines or bullet points
+                    items = [item.strip() for item in value.replace('•', '\n').split('\n') if item.strip()]
+                    industry["career_path"] = items
+            
+            # Extract education
+            if 'Education' in self.industry_df.columns and row.get('Education'):
+                industry["education"] = str(row.get('Education'))
+            
+            return industry
+            
+        except Exception as e:
+            print(f"Error extracting industry from row: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
+            return self._get_default_industry()
+    
+    def _get_default_industry(self) -> Dict:
+        """Return a default industry when no match is found"""
+        return {
+            "matching_code": "XXX",
+            "industry": "General Career Path",
+            "description": "This is a general career path that encompasses various industries and roles.",
+            "trending": "Various fields are growing in today's economy, including technology, healthcare, and renewable energy.",
+            "insight": "Consider exploring different industries to find what aligns with your interests and strengths.",
+            "career_path": [
+                "Entry-level positions in various fields",
+                "Mid-level specialist roles",
+                "Management or leadership positions"
+            ],
+            "education": "Education requirements vary by field. Consider starting with a broad education and specializing based on your interests."
+        }
 
     def process_basic_results(self, answers):
         """Process survey answers and return basic results"""
@@ -298,7 +517,7 @@ class SurveyDatabase:
                         print(f"Warning: Answer at index {q_idx} is not a string: {answer}")
                         continue
                     
-                    # Only count 'Yes' answers
+                    # Only count 'Yes' answers (case insensitive)
                     if answer.upper() in ['YES', 'Y'] and category in category_counts:
                         category_counts[category] += 1
                         print(f"Question {q_idx+1} (Category {category}): {answer} -> Count: {category_counts[category]}")
