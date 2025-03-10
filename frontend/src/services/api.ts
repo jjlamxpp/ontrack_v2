@@ -1,22 +1,36 @@
 import type { Question, SurveyResponse, AnalysisResult } from '../types/survey';
 import { config } from '../config';
 
-// Use the API_URL from config
-const API_BASE_URL = config.API_URL;
+// Use the API_URL from config with fallback to Digital Ocean URL
+const API_BASE_URL = config.API_URL || 'https://ontrack-d4m7j.ondigitalocean.app/api';
 
 console.log('API service initialized with base URL:', API_BASE_URL);
+console.log('Environment variables available:', import.meta.env);
+
+// Helper function to handle API errors
+const handleApiError = async (response: Response, context: string) => {
+    if (!response.ok) {
+        let errorMessage = `${context} failed with status ${response.status}`;
+        try {
+            const errorText = await response.text();
+            console.error(`Error response for ${context}:`, errorText);
+            errorMessage += `: ${errorText}`;
+        } catch (e) {
+            console.error(`Could not parse error response for ${context}`);
+        }
+        throw new Error(errorMessage);
+    }
+    return response;
+};
 
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        console.log('Fetching questions from:', `${API_BASE_URL}/survey/questions`);
-        const response = await fetch(`${API_BASE_URL}/survey/questions`);
+        const url = `${API_BASE_URL}/survey/questions`;
+        console.log('Fetching questions from:', url);
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        const response = await fetch(url);
+        await handleApiError(response, 'Fetching questions');
         
         const data = await response.json();
         console.log('Questions received:', data);
@@ -30,10 +44,11 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        console.log('Submitting survey to:', `${API_BASE_URL}/survey/submit`);
+        const url = `${API_BASE_URL}/survey/submit`;
+        console.log('Submitting survey to:', url);
         console.log('Answers being submitted:', answers);
         
-        const response = await fetch(`${API_BASE_URL}/survey/submit`, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -41,11 +56,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             body: JSON.stringify({ answers }),
         });
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', response.status, errorText);
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        await handleApiError(response, 'Submitting survey');
         
         const data = await response.json();
         console.log('Analysis result received:', data);
