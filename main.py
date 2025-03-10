@@ -1254,6 +1254,48 @@ async def health_check():
             "message": str(e)
         }
 
+@app.get("/api/debug/url-test")
+async def debug_url_test(request: Request):
+    """
+    Debug endpoint to help diagnose URL issues.
+    Returns information about the request URL and available routes.
+    """
+    try:
+        # Get information about the request
+        request_info = {
+            "url": str(request.url),
+            "base_url": str(request.base_url),
+            "path": request.url.path,
+            "method": request.method,
+            "headers": dict(request.headers),
+        }
+        
+        # Get information about available routes
+        routes_info = []
+        for route in app.routes:
+            route_info = {
+                "path": getattr(route, "path", "Unknown"),
+                "name": getattr(route, "name", "Unknown"),
+                "methods": getattr(route, "methods", ["Unknown"]),
+            }
+            routes_info.append(route_info)
+        
+        # Return the debug information
+        return {
+            "status": "success",
+            "message": "URL test successful",
+            "request": request_info,
+            "routes": routes_info,
+            "app_routes_count": len(app.routes)
+        }
+    except Exception as e:
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"URL test failed: {str(e)}",
+            "error_details": traceback.format_exc()
+        }
+
 @app.get("/api/debug/test-survey-submission")
 async def test_survey_submission():
     """
@@ -1261,7 +1303,7 @@ async def test_survey_submission():
     """
     try:
         # Create a test survey response with 'yes' answers
-        test_answers = ["yes"] * 42 # 20 yes answers
+        test_answers = ["yes"] * 42 # 42 yes answers
         
         # Create a SurveyRequest object
         survey_data = SurveyRequest(answers=test_answers)
@@ -1298,7 +1340,7 @@ async def test_yes_no_submission():
     try:
         # Create a test survey response with alternating 'YES' and 'NO' answers
         test_answers = []
-        for i in range(20):  # 20 questions
+        for i in range(42):  # 42 questions
             test_answers.append("YES" if i % 2 == 0 else "NO")
         
         logger.info(f"Test answers: {test_answers}")
