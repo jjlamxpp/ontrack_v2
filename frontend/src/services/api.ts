@@ -47,31 +47,7 @@ export async function fetchQuestions(): Promise<Question[]> {
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
-        // For testing, try the test-submit endpoint first
-        const testUrl = `${API_BASE_URL}/test-submit`;
-        console.log('Trying test submission endpoint first:', testUrl);
-        
-        try {
-            const testResponse = await fetch(testUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ answers }),
-            });
-            
-            if (testResponse.ok) {
-                const testData = await testResponse.json();
-                console.log('Test submission successful:', testData);
-                return testData;
-            } else {
-                console.log('Test submission failed, trying regular endpoint');
-            }
-        } catch (testError) {
-            console.log('Test submission error, trying regular endpoint:', testError);
-        }
-        
-        // If test endpoint fails, try the regular endpoint
+        // Try the regular endpoint first
         const url = `${API_BASE_URL}/survey/submit`;
         console.log('Submitting survey to:', url);
         console.log('Answers being submitted:', answers);
@@ -145,7 +121,28 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                 console.error('Request timed out after 60 seconds');
                 throw new Error('Request timed out. Please try again.');
             }
-            throw fetchError;
+            
+            // If the regular endpoint fails, try the test endpoint as fallback
+            console.log('Regular endpoint failed, trying test endpoint as fallback');
+            const testUrl = `${API_BASE_URL}/test-submit`;
+            console.log('Trying test submission endpoint:', testUrl);
+            
+            const testResponse = await fetch(testUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ answers }),
+            });
+            
+            if (testResponse.ok) {
+                const testData = await testResponse.json();
+                console.log('Test submission successful:', testData);
+                return testData;
+            } else {
+                console.error('Test submission also failed');
+                throw fetchError;
+            }
         } finally {
             clearTimeout(timeoutId);
         }
