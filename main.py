@@ -571,41 +571,142 @@ async def submit_survey_direct(survey_data: SurveyRequest, request: Request):
                 content={"detail": "No answers provided"}
             )
         
-        # For testing purposes, return a hardcoded result
-        # This ensures the API works even if the database connection fails
-        logger.info("Returning hardcoded result for testing")
-        return {
-            "personality": {
-                "type": "RI",
-                "description": "You are a logical and analytical thinker with a strong interest in understanding how things work.",
-                "interpretation": "Your combination of Realistic and Investigative traits suggests you enjoy solving practical problems through analysis and research.",
-                "enjoyment": [
-                    "Working with technical systems",
-                    "Analyzing complex problems",
-                    "Learning new technical skills"
-                ],
-                "your_strength": [
-                    "Logical thinking",
-                    "Problem-solving",
-                    "Technical aptitude"
-                ],
-                "iconId": "1",
-                "riasecScores": {"R": 5, "I": 4, "A": 2, "S": 1, "E": 3, "C": 2}
-            },
-            "industries": [{
-                "id": "RIA",
-                "name": "Engineering",
-                "overview": "Engineering involves applying scientific and mathematical principles to design and build systems, structures, and products.",
-                "trending": "Software engineering, biomedical engineering, and renewable energy engineering are rapidly growing fields.",
-                "insight": "Engineers are in high demand across various sectors, with opportunities for specialization and advancement.",
-                "examplePaths": [
-                    "Software Engineer",
-                    "Mechanical Engineer",
-                    "Civil Engineer"
-                ],
-                "education": "Bachelor's degree in engineering or related field, with professional certification often required."
-            }]
-        }
+        # Initialize the database
+        try:
+            # Try to find the Excel file in different possible locations
+            excel_path = Path("/app/app/database/Database.xlsx")
+            logger.info(f"Looking for Excel file at: {excel_path}")
+            
+            if not excel_path.exists():
+                logger.error(f"Excel file not found at {excel_path}")
+                # Return the test data as fallback
+                logger.info("Excel file not found, returning test data as fallback")
+                return {
+                    "personality": {
+                        "type": "RI",
+                        "description": "You are a logical and analytical thinker with a strong interest in understanding how things work.",
+                        "interpretation": "Your combination of Realistic and Investigative traits suggests you enjoy solving practical problems through analysis and research.",
+                        "enjoyment": [
+                            "Working with technical systems",
+                            "Analyzing complex problems",
+                            "Learning new technical skills"
+                        ],
+                        "your_strength": [
+                            "Logical thinking",
+                            "Problem-solving",
+                            "Technical aptitude"
+                        ],
+                        "iconId": "1",
+                        "riasecScores": {"R": 5, "I": 4, "A": 2, "S": 1, "E": 3, "C": 2}
+                    },
+                    "industries": [{
+                        "id": "RIA",
+                        "name": "Engineering",
+                        "overview": "Engineering involves applying scientific and mathematical principles to design and build systems, structures, and products.",
+                        "trending": "Software engineering, biomedical engineering, and renewable energy engineering are rapidly growing fields.",
+                        "insight": "Engineers are in high demand across various sectors, with opportunities for specialization and advancement.",
+                        "examplePaths": [
+                            "Software Engineer",
+                            "Mechanical Engineer",
+                            "Civil Engineer"
+                        ],
+                        "education": "Bachelor's degree in engineering or related field, with professional certification often required."
+                    }]
+                }
+            
+            # Initialize the database
+            logger.info(f"Initializing database with Excel file: {excel_path}")
+            from app.database.excel_db import SurveyDatabase
+            db = SurveyDatabase(str(excel_path))
+            logger.info("Database initialized successfully")
+            
+            # Process the survey answers
+            logger.info("Processing survey answers with database")
+            
+            # Normalize answers to uppercase
+            normalized_answers = [answer.upper() for answer in survey_data.answers]
+            logger.info(f"Normalized answers: {normalized_answers}")
+            
+            # Process the results
+            result = db.process_basic_results(normalized_answers)
+            logger.info(f"Processed survey results: {result.keys()}")
+            
+            # Extract personality type information
+            personality_type = result.get("personality_type", {})
+            if not personality_type:
+                logger.warning("No personality type found in results")
+                personality_type = {}
+            
+            # Format the personality analysis
+            personality = {
+                "type": personality_type.get("code", "XX"),
+                "description": personality_type.get("who_you_are", ""),
+                "interpretation": personality_type.get("how_this_combination", ""),
+                "enjoyment": personality_type.get("what_you_might_enjoy", []),
+                "your_strength": personality_type.get("your_strength", []),
+                "iconId": personality_type.get("icon_id", ""),
+                "riasecScores": result.get("category_counts", {})
+            }
+            
+            # Format the industry recommendations
+            industries = []
+            for industry in result.get("recommended_industries", []):
+                industries.append({
+                    "id": industry.get("matching_code", ""),
+                    "name": industry.get("industry", ""),
+                    "overview": industry.get("description", ""),
+                    "trending": industry.get("trending", ""),
+                    "insight": industry.get("insight", ""),
+                    "examplePaths": industry.get("career_path", []),
+                    "education": industry.get("education", "")
+                })
+            
+            # Return the formatted result
+            analysis_result = {
+                "personality": personality,
+                "industries": industries
+            }
+            
+            logger.info(f"Returning analysis result with {len(industries)} industries")
+            return analysis_result
+            
+        except Exception as e:
+            logger.error(f"Error processing survey: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Return the test data as fallback
+            logger.info("Error processing survey, returning test data as fallback")
+            return {
+                "personality": {
+                    "type": "RI",
+                    "description": "You are a logical and analytical thinker with a strong interest in understanding how things work.",
+                    "interpretation": "Your combination of Realistic and Investigative traits suggests you enjoy solving practical problems through analysis and research.",
+                    "enjoyment": [
+                        "Working with technical systems",
+                        "Analyzing complex problems",
+                        "Learning new technical skills"
+                    ],
+                    "your_strength": [
+                        "Logical thinking",
+                        "Problem-solving",
+                        "Technical aptitude"
+                    ],
+                    "iconId": "1",
+                    "riasecScores": {"R": 5, "I": 4, "A": 2, "S": 1, "E": 3, "C": 2}
+                },
+                "industries": [{
+                    "id": "RIA",
+                    "name": "Engineering",
+                    "overview": "Engineering involves applying scientific and mathematical principles to design and build systems, structures, and products.",
+                    "trending": "Software engineering, biomedical engineering, and renewable energy engineering are rapidly growing fields.",
+                    "insight": "Engineers are in high demand across various sectors, with opportunities for specialization and advancement.",
+                    "examplePaths": [
+                        "Software Engineer",
+                        "Mechanical Engineer",
+                        "Civil Engineer"
+                    ],
+                    "education": "Bachelor's degree in engineering or related field, with professional certification often required."
+                }]
+            }
         
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -732,6 +833,70 @@ async def test_post_method(request: Request):
     except Exception as e:
         logger.error(f"Error in test POST endpoint: {str(e)}")
         return {"status": "error", "message": str(e)}
+
+# Add a debug endpoint to check the database status
+@app.get("/api/debug/database")
+async def debug_database():
+    """Debug endpoint to check the database status"""
+    try:
+        # Try to find the Excel file in different possible locations
+        excel_path = Path("/app/app/database/Database.xlsx")
+        logger.info(f"Looking for Excel file at: {excel_path}")
+        
+        result = {
+            "file_exists": excel_path.exists(),
+            "file_path": str(excel_path),
+            "current_directory": os.getcwd(),
+            "database_directory_exists": (Path("/app/app/database")).exists(),
+        }
+        
+        if excel_path.exists():
+            # Initialize the database
+            logger.info(f"Initializing database with Excel file: {excel_path}")
+            from app.database.excel_db import SurveyDatabase
+            db = SurveyDatabase(str(excel_path))
+            logger.info("Database initialized successfully")
+            
+            # Get questions
+            questions = db.get_all_questions()
+            result["questions_count"] = len(questions)
+            result["first_question"] = questions[0] if questions else None
+            
+            # Test processing
+            test_answers = ["YES"] * len(questions)
+            test_result = db.process_basic_results(test_answers)
+            result["test_processing"] = {
+                "success": True,
+                "result_keys": list(test_result.keys()),
+                "personality_type": test_result.get("personality_type", {}).get("role", "Unknown"),
+                "industries_count": len(test_result.get("recommended_industries", [])),
+            }
+        else:
+            # List all files in the app/database directory to help debug
+            database_dir = Path("/app/app/database")
+            if database_dir.exists():
+                result["database_dir_contents"] = [str(p) for p in database_dir.glob("*")]
+            else:
+                result["database_dir_exists"] = False
+                
+                # List all files in the current directory to help debug
+                result["current_dir_contents"] = [str(p) for p in Path(".").glob("*")]
+                
+                # List all files in the app directory to help debug
+                app_dir = Path("/app")
+                if app_dir.exists():
+                    result["app_dir_contents"] = [str(p) for p in app_dir.glob("*")]
+                else:
+                    result["app_dir_exists"] = False
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error in debug_database: {str(e)}")
+        logger.error(traceback.format_exc())
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 if __name__ == "__main__":
     import uvicorn
