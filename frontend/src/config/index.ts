@@ -1,5 +1,6 @@
 export const config = {
-  API_URL: import.meta.env.VITE_API_URL || 'https://ontrack-d4m7j.ondigitalocean.app/api',
+  // Use a relative URL to avoid path issues with proxies
+  API_URL: '/api',
   ENV: import.meta.env.VITE_ENV || 'production'
 };
 
