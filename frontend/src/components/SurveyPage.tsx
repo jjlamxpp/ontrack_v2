@@ -252,6 +252,103 @@ export function SurveyPage() {
     }
   };
 
+  // Add a debug function to test the API
+  const debugApi = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Import the debug function
+      const { debugSurveyTest } = await import('../services/api');
+      
+      // Run the debug test
+      const result = await debugSurveyTest();
+      
+      // Show the result in an alert
+      alert('Debug test completed. Check the console for details.');
+      console.log('Debug test result:', result);
+      
+      // If the test was successful, show a more detailed alert
+      if (result.test_processing && result.test_processing.success) {
+        alert(`Test processing successful!\nPersonality type: ${result.test_processing.personality_type}\nIndustries: ${result.test_processing.industries_count}`);
+      }
+    } catch (error) {
+      console.error('Error in debug test:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred during the debug test');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a function to check the file system
+  const checkFileSystem = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Import the debug function
+      const { debugFileSystem } = await import('../services/api');
+      
+      // Run the file system check
+      const result = await debugFileSystem();
+      
+      // Show the result in an alert
+      alert('File system check completed. Check the console for details.');
+      console.log('File system check result:', result);
+      
+      // If the database file exists, show more details
+      if (result.database_checks && result.database_checks.file_exists !== false) {
+        if (result.database_checks.initialization === 'success') {
+          alert(`Database check successful!\nQuestions count: ${result.database_checks.questions_count}\nTest result keys: ${result.database_checks.test_result_keys.join(', ')}`);
+        } else {
+          alert(`Database file exists but initialization failed: ${result.database_checks.initialization_error}`);
+        }
+      } else {
+        alert('Database file does not exist. Check the console for more details.');
+      }
+    } catch (error) {
+      console.error('Error in file system check:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred during the file system check');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add a function to use the direct test endpoint
+  const useDirectTest = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Import the direct test function
+      const { directTest } = await import('../services/api');
+      
+      // Convert all answers to uppercase for consistency
+      const normalizedAnswers = answers.map(answer => answer.toUpperCase());
+      console.log('Normalized answers for direct test:', normalizedAnswers);
+      
+      // Use the direct test endpoint
+      const result = await directTest(normalizedAnswers);
+      console.log('Direct test successful, received result:', result);
+      
+      // Store the result in localStorage
+      localStorage.setItem('analysisResult', JSON.stringify(result));
+      console.log('Analysis result stored in localStorage');
+      
+      // Clear survey answers after successful submission
+      localStorage.removeItem('surveyAnswers');
+      
+      // Navigate to result page
+      console.log('Navigating to result page...');
+      navigate('/result');
+    } catch (error) {
+      console.error('Error in direct test:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred during the direct test');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
@@ -281,6 +378,27 @@ export function SurveyPage() {
                 Use Test Data
               </button>
             )}
+            
+            <button 
+              onClick={debugApi} 
+              className="px-4 py-2 bg-yellow-500 rounded hover:bg-yellow-600"
+            >
+              Debug API
+            </button>
+            
+            <button 
+              onClick={checkFileSystem} 
+              className="px-4 py-2 bg-orange-500 rounded hover:bg-orange-600"
+            >
+              Check Files
+            </button>
+            
+            <button 
+              onClick={useDirectTest} 
+              className="px-4 py-2 bg-red-500 rounded hover:bg-red-600"
+            >
+              Direct Test
+            </button>
           </div>
         </div>
       </div>
@@ -375,6 +493,30 @@ export function SurveyPage() {
                 onClick={testSurveySubmission}
               >
                 Test Submit
+              </button>
+              
+              {/* Add a debug button */}
+              <button
+                className="px-8 py-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors"
+                onClick={debugApi}
+              >
+                Debug API
+              </button>
+              
+              {/* Add a file system check button */}
+              <button
+                className="px-8 py-3 rounded-full bg-orange-500 hover:bg-orange-600 transition-colors"
+                onClick={checkFileSystem}
+              >
+                Check Files
+              </button>
+              
+              {/* Add a direct test button */}
+              <button
+                className="px-8 py-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors"
+                onClick={useDirectTest}
+              >
+                Direct Test
               </button>
             </>
           )}
