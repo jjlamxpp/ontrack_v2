@@ -76,10 +76,20 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         console.log('Current origin:', window.location.origin);
         console.log('Current pathname:', window.location.pathname);
         
+        // Ensure all answers are strings and normalize them
+        const normalizedAnswers = answers.map(answer => {
+            if (typeof answer !== 'string') {
+                console.warn('Non-string answer found:', answer);
+                return '';
+            }
+            return answer.toUpperCase();
+        });
+        
+        console.log('Normalized answers before submission:', normalizedAnswers);
+        
         // Try the regular endpoint
         const url = `${API_BASE_URL}/survey/submit`;
         console.log('Submitting survey to:', url);
-        console.log('Answers being submitted:', answers);
         
         // Add a timeout to the fetch request
         const controller = new AbortController();
@@ -92,7 +102,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ answers }),
+                body: JSON.stringify({ answers: normalizedAnswers }),
                 signal: controller.signal
             });
             
