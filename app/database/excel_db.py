@@ -5,7 +5,7 @@ from typing import List, Dict
 import numpy as np
 
 class SurveyDatabase:
-    def __init__(self, excel_path: str = 'app/database/Database.xlsx'):
+    def __init__(self, excel_path: str = '/app/database/Database.xlsx'):
         self.excel_path = Path(excel_path)
         if not self.excel_path.exists():
             raise FileNotFoundError(f"Excel file not found at {excel_path}")
