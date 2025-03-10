@@ -335,17 +335,27 @@ export function SurveyPage() {
               Next Page
             </button>
           ) : (
-            <button
-              className={`px-8 py-3 rounded-full transition-colors ${
-                answers.every(answer => answer !== '')
-                  ? 'bg-green-500 hover:bg-green-600'
-                  : 'bg-gray-500 cursor-not-allowed'
-              }`}
-              onClick={handleSubmit}
-              disabled={!answers.every(answer => answer !== '')}
-            >
-              Submit Survey ({answers.filter(a => a !== '').length}/{questions.length})
-            </button>
+            <>
+              <button
+                className={`px-8 py-3 rounded-full transition-colors ${
+                  answers.every(answer => answer !== '')
+                    ? 'bg-green-500 hover:bg-green-600'
+                    : 'bg-gray-500 cursor-not-allowed'
+                }`}
+                onClick={handleSubmit}
+                disabled={!answers.every(answer => answer !== '')}
+              >
+                Submit Survey ({answers.filter(a => a !== '').length}/{questions.length})
+              </button>
+              
+              {/* Add a test button for debugging */}
+              <button
+                className="px-8 py-3 rounded-full bg-purple-500 hover:bg-purple-600 transition-colors"
+                onClick={testSurveySubmission}
+              >
+                Test Submit
+              </button>
+            </>
           )}
         </div>
       </div>
