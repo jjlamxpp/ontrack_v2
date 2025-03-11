@@ -20,56 +20,47 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
+# Copy the entire project
+COPY . .
+
+# List files to debug
+RUN ls -la && ls -la app && ls -la app/database || echo "Database directory not found"
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install uvicorn gunicorn
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy frontend files first to optimize build caching
-COPY frontend/package*.json frontend/
-
-# Install frontend dependencies
+# Install frontend dependencies and build
 WORKDIR /app/frontend
-RUN npm install
-
-# Copy frontend source code
-COPY frontend/ ./
-
-# Build the frontend
-RUN npm run build
+RUN npm install && npm run build
 
 # Return to app directory
 WORKDIR /app
 
-# Copy the rest of the application
-COPY . .
+# Create necessary directories if they don't exist
+RUN mkdir -p app/static app/database
 
-# Create necessary directories
-RUN mkdir -p /app/app/static /app/app/database
+# Copy the excel_db.py file to the database directory if it's not already there
+RUN if [ -f "excel_db.py" ] && [ ! -f "app/database/excel_db.py" ]; then \
+        cp excel_db.py app/database/; \
+        echo "Copied excel_db.py to app/database/"; \
+    elif [ -f "app/database/excel_db.py" ]; then \
+        echo "excel_db.py already in app/database/"; \
+    else \
+        echo "Warning: excel_db.py not found"; \
+        find . -name "excel_db.py"; \
+    fi
 
-# Ensure excel_db.py is in the correct locations
-COPY excel_db.py /app/
-COPY excel_db.py /app/app/database/
+# Copy the frontend build to the static directory
+RUN if [ -d "frontend/dist" ]; then \
+        cp -R frontend/dist/* app/static/ || echo "No files to copy from frontend/dist"; \
+        echo "Copied frontend build to app/static/"; \
+    else \
+        echo "Warning: frontend/dist directory not found"; \
+        ls -la frontend; \
+    fi
 
-# If Database.xlsx exists, copy it to the database directory
-COPY Database.xlsx /app/app/database/ || echo "Database.xlsx not found (will be mounted at runtime)"
-
-# Copy the built frontend files to the static directory
-RUN cp -R /app/frontend/dist/* /app/app/static/ || echo "No frontend build files found"
-
-# Make port 8080 available to the world outside this container
-# This matches the port specified in your Digital Ocean app spec
+# Make port 8080 available
 EXPOSE 8080
 
-# Create a startup script
-RUN echo '#!/bin/bash\n\
-echo "Starting OnTrack application..."\n\
-echo "Environment: $NODE_ENV"\n\
-echo "Port: $PORT"\n\
-python main.py\n\
-' > /app/start.sh && chmod +x /app/start.sh
-
-# Run the application with the correct port
-CMD ["sh", "-c", "python main.py"]
+# Run the application
+CMD ["python", "main.py"]
