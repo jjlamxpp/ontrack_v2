@@ -97,20 +97,98 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
         try {
-            // Make the request with explicit method and headers
+            // Ensure the request body matches exactly what the backend expects
+            const requestBody = {
+                answers: normalizedAnswers
+            };
+            
             console.log('Making POST request with the following options:');
             console.log('- Method: POST');
             console.log('- Headers: Content-Type: application/json');
-            console.log('- Body:', JSON.stringify({ answers: normalizedAnswers }));
+            console.log('- Body:', JSON.stringify(requestBody));
             
+            // Try using XMLHttpRequest as an alternative to fetch
+            return new Promise<AnalysisResult>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Accept', 'application/json');
+                xhr.timeout = 30000; // 30 second timeout
+                
+                xhr.onload = function() {
+                    clearTimeout(timeoutId);
+                    console.log('Survey submission response status:', xhr.status);
+                    console.log('Survey submission response headers:', xhr.getAllResponseHeaders());
+                    
+                    try {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const data = JSON.parse(xhr.responseText);
+                            console.log('Response data received:', data);
+                            
+                            // Validate the result structure
+                            if (!data || typeof data !== 'object') {
+                                console.error('Invalid result format:', data);
+                                resolve(getFallbackResult());
+                                return;
+                            }
+                            
+                            // Check if we have the expected fields
+                            if (!data.personality || !data.industries) {
+                                console.error('Missing required fields in result:', data);
+                                resolve(getFallbackResult());
+                                return;
+                            }
+                            
+                            resolve(data);
+                        } else {
+                            console.error('Error response:', xhr.status);
+                            try {
+                                const data = JSON.parse(xhr.responseText);
+                                console.error('Error data:', data);
+                                
+                                // If we got a valid result structure despite the error status, use it
+                                if (data && data.personality && data.industries) {
+                                    console.log('Using result from error response as it has valid structure');
+                                    resolve(data);
+                                    return;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing error response:', e);
+                            }
+                            
+                            resolve(getFallbackResult());
+                        }
+                    } catch (e) {
+                        console.error('Error processing response:', e);
+                        resolve(getFallbackResult());
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    clearTimeout(timeoutId);
+                    console.error('XHR error occurred');
+                    resolve(getFallbackResult());
+                };
+                
+                xhr.ontimeout = function() {
+                    console.error('XHR request timed out');
+                    resolve(getFallbackResult());
+                };
+                
+                xhr.send(JSON.stringify(requestBody));
+            });
+            
+            /* Original fetch implementation - commented out for now
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ answers: normalizedAnswers }),
-                signal: controller.signal
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+                mode: 'cors',
+                credentials: 'same-origin'
             });
             
             clearTimeout(timeoutId);
@@ -171,6 +249,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             }
             
             return data;
+            */
         } catch (fetchError: any) {
             if (fetchError.name === 'AbortError') {
                 console.error('Request timed out after 30 seconds');
@@ -462,5 +541,68 @@ export async function debugRoutes(): Promise<any> {
     } catch (error) {
         console.error('Error in debug routes:', error);
         throw error;
+    }
+}
+
+// Add a test function for survey submission
+export async function testSurveySubmit(answers: string[]): Promise<any> {
+    try {
+        console.log('Testing survey submission...');
+        
+        // Ensure all answers are strings and normalize them
+        const normalizedAnswers = answers.map(answer => {
+            if (typeof answer !== 'string') {
+                console.warn('Non-string answer found:', answer);
+                return '';
+            }
+            return answer.toUpperCase();
+        });
+        
+        console.log('Normalized answers for test:', normalizedAnswers);
+        
+        // Construct the URL for the test endpoint
+        const url = `${window.location.origin}/api/test-survey-submit`;
+        console.log('Testing survey submission at:', url);
+        
+        // Create the request body
+        const requestBody = {
+            answers: normalizedAnswers
+        };
+        
+        console.log('Test request body:', JSON.stringify(requestBody));
+        
+        // Make the request
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        console.log('Test response status:', response.status);
+        
+        // Try to parse the response as JSON
+        try {
+            const data = await response.json();
+            console.log('Test response data:', data);
+            return data;
+        } catch (jsonError) {
+            console.error('Error parsing test response:', jsonError);
+            
+            // Try to get the response text
+            try {
+                const text = await response.text();
+                console.error('Test response text:', text);
+                return { error: 'Error parsing JSON response', text };
+            } catch (textError) {
+                console.error('Error getting test response text:', textError);
+                return { error: 'Error getting response text' };
+            }
+        }
+    } catch (error) {
+        console.error('Error in test survey submission:', error);
+        return { error: String(error) };
     }
 }
