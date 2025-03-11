@@ -1245,6 +1245,53 @@ async def debug_file_system():
 async def direct_test(survey_data: SurveyRequest = None):
     """Direct test endpoint that will always return a valid result"""
     logger.info("Direct test endpoint called")
+    
+    try:
+        # If survey_data is provided, try to process it
+        if survey_data and survey_data.answers:
+            logger.info(f"Processing survey data with {len(survey_data.answers)} answers")
+            logger.info(f"Answers: {survey_data.answers}")
+            
+            # Try to find the database file
+            db_path = None
+            possible_paths = [
+                "/app/app/database/Database.xlsx",
+                "app/database/Database.xlsx",
+                "database/Database.xlsx",
+                "Database.xlsx"
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    logger.info(f"Found database at {db_path}")
+                    break
+            
+            if db_path:
+                try:
+                    # Initialize the database
+                    db = SurveyDatabase(excel_path=db_path)
+                    logger.info("Database initialized successfully")
+                    
+                    # Process the survey
+                    result = db.process_survey(survey_data.answers)
+                    logger.info("Survey processed successfully")
+                    
+                    # Return the result
+                    return result
+                except Exception as db_error:
+                    logger.error(f"Error processing survey: {str(db_error)}")
+                    logger.exception("Exception details:")
+            else:
+                logger.error("Database file not found")
+        else:
+            logger.warning("No survey data provided or empty answers")
+    except Exception as e:
+        logger.error(f"Error in direct_test: {str(e)}")
+        logger.exception("Exception details:")
+    
+    # Return fallback result if anything fails
+    logger.info("Returning fallback result")
     return {
         "personality": {
             "type": "RI",
@@ -1467,6 +1514,83 @@ async def test_survey_submit(request: Request):
         logger.error(f"Unexpected error in test_survey_submit: {str(e)}")
         logger.exception("Exception details:")
         return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+@app.post("/api/diagnostic-submit")
+async def diagnostic_submit(request: Request):
+    """
+    Diagnostic endpoint for survey submission.
+    Logs detailed information about the request and tries multiple ways to parse the body.
+    """
+    logger.info("Diagnostic submit endpoint called")
+    
+    # Log request details
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request URL: {request.url}")
+    logger.info(f"Request headers: {request.headers}")
+    
+    # Try to get the raw body
+    try:
+        body_bytes = await request.body()
+        logger.info(f"Raw request body (bytes): {body_bytes}")
+        
+        # Try to decode as UTF-8
+        try:
+            body_text = body_bytes.decode('utf-8')
+            logger.info(f"Request body (text): {body_text}")
+        except Exception as decode_error:
+            logger.error(f"Error decoding body as UTF-8: {str(decode_error)}")
+        
+        # Try to parse as JSON
+        try:
+            # Reset the request body
+            await request.body()
+            
+            # Try to parse as JSON
+            json_body = await request.json()
+            logger.info(f"Request body (JSON): {json_body}")
+            
+            # Check if it has the expected structure
+            if isinstance(json_body, dict) and "answers" in json_body:
+                answers = json_body["answers"]
+                logger.info(f"Found answers field with {len(answers)} items")
+                
+                # Check the types of the answers
+                answer_types = [f"{type(a).__name__}" for a in answers]
+                logger.info(f"Answer types: {answer_types}")
+                
+                # Try to process the survey
+                try:
+                    # Convert all answers to strings
+                    string_answers = [str(a) for a in answers]
+                    
+                    # Create a SurveyRequest object
+                    survey_data = SurveyRequest(answers=string_answers)
+                    
+                    # Call the direct_test function
+                    result = await direct_test(survey_data)
+                    logger.info("Successfully processed survey with direct_test")
+                    
+                    return {
+                        "status": "success",
+                        "message": "Survey processed successfully",
+                        "result": result
+                    }
+                except Exception as process_error:
+                    logger.error(f"Error processing survey: {str(process_error)}")
+                    logger.exception("Exception details:")
+            else:
+                logger.warning("JSON body does not have the expected structure")
+        except Exception as json_error:
+            logger.error(f"Error parsing body as JSON: {str(json_error)}")
+    except Exception as body_error:
+        logger.error(f"Error getting request body: {str(body_error)}")
+    
+    # Return a fallback result
+    return {
+        "status": "error",
+        "message": "Could not process survey submission",
+        "fallback_result": get_fallback_result()
+    }
 
 if __name__ == "__main__":
     import uvicorn
