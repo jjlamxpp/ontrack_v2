@@ -1,15 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  fetchQuestions, 
-  submitSurveyAndGetAnalysis, 
-  checkApiHealth, 
-  debugUrlTest, 
-  testPostEndpoint, 
-  debugRoutes, 
-  testSurveySubmit,
-  diagnosticSubmit
-} from '../services/api';
+import { fetchQuestions, submitSurveyAndGetAnalysis } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -21,7 +12,6 @@ export function SurveyPage() {
   const [answers, setAnswers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [testFallbackVisible, setTestFallbackVisible] = useState(false);
   const apiConfig = useContext(ApiContext);
   
   // Get current page number with validation
@@ -153,46 +143,8 @@ export function SurveyPage() {
       // Submit the survey and get analysis
       console.log('Submitting survey...');
       
-      // Try multiple approaches in sequence
-      let result;
-      
-      // First try the main submission method
-      try {
-        console.log('Trying main submission method...');
-        result = await submitSurveyAndGetAnalysis(normalizedAnswers);
-        console.log('Survey submission successful:', result);
-      } catch (submitError) {
-        console.error('Error during survey submission:', submitError);
-        
-        // If the main submission fails, try the diagnostic endpoint
-        try {
-          console.log('Trying diagnostic endpoint...');
-          result = await diagnosticSubmit(normalizedAnswers);
-          console.log('Diagnostic submission successful:', result);
-        } catch (diagnosticError) {
-          console.error('Diagnostic submission failed:', diagnosticError);
-          
-          // If the diagnostic endpoint fails, try the direct test
-          try {
-            console.log('Trying direct test as last resort...');
-            const { directTest } = await import('../services/api');
-            result = await directTest(normalizedAnswers);
-            console.log('Direct test successful:', result);
-          } catch (directTestError) {
-            console.error('All submission methods failed:', directTestError);
-            setError('Survey submission failed after trying all methods. Please try again or use one of the debug options below.');
-            setLoading(false);
-            return;
-          }
-        }
-      }
-      
-      if (!result || !result.personality || !result.industries) {
-        console.error('Invalid result structure:', result);
-        setError('Received invalid result from server. Please try again or use one of the debug options below.');
-        setLoading(false);
-        return;
-      }
+      const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
+      console.log('Survey submission successful:', result);
       
       // Store the result in localStorage
       localStorage.setItem('analysisResult', JSON.stringify(result));
@@ -207,355 +159,7 @@ export function SurveyPage() {
       navigate('/result');
     } catch (error) {
       console.error('Unhandled error in handleSubmit:', error);
-      setError('An error occurred while submitting your survey. Please try again or use one of the debug options below.');
-      setLoading(false);
-    }
-  };
-
-  // Add a test function to verify API connectivity
-  const testApiConnection = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Test the basic API endpoint
-      const testUrl = `${apiConfig.apiBaseUrl}/test`;
-      console.log('Testing API connection at:', testUrl);
-      
-      const response = await fetch(testUrl);
-      const data = await response.json();
-      
-      console.log('API test response:', data);
-      
-      if (data.status === 'ok') {
-        alert('API connection successful! The API is working.');
-      } else {
-        alert(`API test failed: ${data.message || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('API test error:', error);
-      alert(`API test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Add a test function to verify survey submission
-  const testSurveySubmission = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Test the survey submission endpoint
-      const testUrl = `${apiConfig.apiBaseUrl}/test-submit`;
-      console.log('Testing survey submission at:', testUrl);
-      
-      const response = await fetch(testUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ answers: Array(42).fill('YES') }),
-      });
-      
-      const data = await response.json();
-      console.log('Test survey submission response:', data);
-      
-      if (data.personality && data.industries) {
-        // Store the result in localStorage
-        localStorage.setItem('analysisResult', JSON.stringify(data));
-        
-        // Navigate to result page
-        navigate('/result');
-      } else {
-        alert('Test survey submission failed: Invalid response format');
-      }
-    } catch (error) {
-      console.error('Test survey submission error:', error);
-      alert(`Test survey submission error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a debug function to test the API
-  const debugApi = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Import the debug function
-      const { debugSurveyTest } = await import('../services/api');
-      
-      // Run the debug test
-      const result = await debugSurveyTest();
-      
-      // Show the result in an alert
-      alert('Debug test completed. Check the console for details.');
-      console.log('Debug test result:', result);
-      
-      // If the test was successful, show a more detailed alert
-      if (result.test_processing && result.test_processing.success) {
-        alert(`Test processing successful!\nPersonality type: ${result.test_processing.personality_type}\nIndustries: ${result.test_processing.industries_count}`);
-      }
-    } catch (error) {
-      console.error('Error in debug test:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred during the debug test');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a function to check the file system
-  const checkFileSystem = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Import the debug function
-      const { debugFileSystem } = await import('../services/api');
-      
-      // Run the file system check
-      const result = await debugFileSystem();
-      
-      // Show the result in an alert
-      alert('File system check completed. Check the console for details.');
-      console.log('File system check result:', result);
-      
-      // If the database file exists, show more details
-      if (result.database_checks && result.database_checks.file_exists !== false) {
-        if (result.database_checks.initialization === 'success') {
-          alert(`Database check successful!\nQuestions count: ${result.database_checks.questions_count}\nTest result keys: ${result.database_checks.test_result_keys.join(', ')}`);
-        } else {
-          alert(`Database file exists but initialization failed: ${result.database_checks.initialization_error}`);
-        }
-      } else {
-        alert('Database file does not exist. Check the console for more details.');
-      }
-    } catch (error) {
-      console.error('Error in file system check:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred during the file system check');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a function to use the direct test endpoint
-  const useDirectTest = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Import the direct test function
-      const { directTest } = await import('../services/api');
-      
-      // Convert all answers to uppercase for consistency
-      const normalizedAnswers = answers.map(answer => answer.toUpperCase());
-      console.log('Normalized answers for direct test:', normalizedAnswers);
-      
-      // Use the direct test endpoint
-      const result = await directTest(normalizedAnswers);
-      console.log('Direct test successful, received result:', result);
-      
-      // Store the result in localStorage
-      localStorage.setItem('analysisResult', JSON.stringify(result));
-      console.log('Analysis result stored in localStorage');
-      
-      // Clear survey answers after successful submission
-      localStorage.removeItem('surveyAnswers');
-      
-      // Navigate to result page
-      console.log('Navigating to result page...');
-      navigate('/result');
-    } catch (error) {
-      console.error('Error in direct test:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred during the direct test');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a test function for URL debugging
-  const testUrlDebug = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('Testing URL debug endpoint...');
-      const result = await debugUrlTest();
-      
-      console.log('URL debug result:', result);
-      alert(`URL debug test successful. Check console for details.`);
-    } catch (error) {
-      console.error('Error in URL debug test:', error);
-      setError(`URL debug test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a test function for POST endpoint
-  const testPost = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('Testing POST endpoint...');
-      const result = await testPostEndpoint();
-      
-      console.log('POST test result:', result);
-      alert(`POST test successful. Check console for details.`);
-    } catch (error) {
-      console.error('Error in POST test:', error);
-      setError(`POST test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Add a test function for routes endpoint
-  const testRoutes = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('Testing routes endpoint...');
-      const result = await debugRoutes();
-      
-      console.log('Routes test result:', result);
-      alert(`Routes test successful. Found ${result.routes_count} routes. Check console for details.`);
-    } catch (error) {
-      console.error('Error in routes test:', error);
-      setError(`Routes test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkHealth = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log('Checking API health...');
-      const healthData = await checkApiHealth();
-      
-      // Display the health check result
-      alert(JSON.stringify(healthData, null, 2));
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error checking API health:', error);
-      setError('Failed to check API health. See console for details.');
-      setLoading(false);
-    }
-  };
-
-  const handleTestSubmit = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Log the current state of answers
-      console.log('Testing submission with current answers:', answers);
-      
-      // Validate that we have all answers
-      const missingAnswers = questions.filter((_, index) => !answers[index]);
-      if (missingAnswers.length > 0) {
-        console.log('Missing answers for questions:', missingAnswers);
-        setError('Please answer all questions before testing.');
-        setLoading(false);
-        return;
-      }
-      
-      // Ensure all answers are valid strings
-      const validatedAnswers = answers.map(answer => {
-        if (!answer || typeof answer !== 'string') {
-          console.warn('Invalid answer found:', answer);
-          return 'NO'; // Default to 'NO' for invalid answers
-        }
-        return answer;
-      });
-      
-      // Normalize answers to uppercase
-      const normalizedAnswers = validatedAnswers.map(answer => answer.toUpperCase());
-      console.log('Normalized answers for test:', normalizedAnswers);
-      
-      // Test the survey submission
-      console.log('Testing survey submission...');
-      try {
-        const result = await testSurveySubmit(normalizedAnswers);
-        console.log('Test survey submission result:', result);
-        
-        // Show the result to the user
-        setError(`Test result: ${JSON.stringify(result)}`);
-      } catch (testError) {
-        console.error('Error during test survey submission:', testError);
-        setError(`Test error: ${String(testError)}`);
-      }
-    } catch (error) {
-      console.error('Unhandled error in handleTestSubmit:', error);
-      setError('An error occurred while testing your survey submission.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDiagnosticTest = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Log the current state of answers
-      console.log('Testing diagnostic submission with current answers:', answers);
-      
-      // Validate that we have all answers
-      const missingAnswers = questions.filter((_, index) => !answers[index]);
-      if (missingAnswers.length > 0) {
-        console.log('Missing answers for questions:', missingAnswers);
-        setError('Please answer all questions before testing.');
-        setLoading(false);
-        return;
-      }
-      
-      // Ensure all answers are valid strings
-      const validatedAnswers = answers.map(answer => {
-        if (!answer || typeof answer !== 'string') {
-          console.warn('Invalid answer found:', answer);
-          return 'NO'; // Default to 'NO' for invalid answers
-        }
-        return answer;
-      });
-      
-      // Normalize answers to uppercase
-      const normalizedAnswers = validatedAnswers.map(answer => answer.toUpperCase());
-      console.log('Normalized answers for diagnostic test:', normalizedAnswers);
-      
-      // Test the diagnostic submission
-      console.log('Testing diagnostic submission...');
-      try {
-        const result = await diagnosticSubmit(normalizedAnswers);
-        console.log('Diagnostic submission result:', result);
-        
-        // Show the result to the user
-        setError(`Diagnostic test successful. Result: ${JSON.stringify(result).substring(0, 100)}...`);
-        
-        // Store the result in localStorage
-        localStorage.setItem('analysisResult', JSON.stringify(result));
-        
-        // Ask the user if they want to proceed to the result page
-        if (window.confirm('Diagnostic test successful! Would you like to view the result?')) {
-          // Navigate to the result page
-          navigate('/result');
-        }
-      } catch (testError) {
-        console.error('Error during diagnostic submission:', testError);
-        setError(`Diagnostic test error: ${String(testError)}`);
-      }
-    } catch (error) {
-      console.error('Unhandled error in handleDiagnosticTest:', error);
-      setError('An error occurred while testing your diagnostic submission.');
-    } finally {
+      setError('An error occurred while submitting your survey. Please try again.');
       setLoading(false);
     }
   };
@@ -573,44 +177,12 @@ export function SurveyPage() {
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
         <div className="text-center">
           <div className="text-xl text-red-500 mb-4">Error: {error}</div>
-          <div className="flex gap-4 justify-center">
-            <button 
-              onClick={() => window.location.reload()} 
-              className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
-            >
-              Retry
-            </button>
-            
-            {testFallbackVisible && (
-              <button 
-                onClick={testSurveySubmission} 
-                className="px-4 py-2 bg-purple-500 rounded hover:bg-purple-600"
-              >
-                Use Test Data
-              </button>
-            )}
-            
-            <button 
-              onClick={debugApi} 
-              className="px-4 py-2 bg-yellow-500 rounded hover:bg-yellow-600"
-            >
-              Debug API
-            </button>
-            
-            <button 
-              onClick={checkFileSystem} 
-              className="px-4 py-2 bg-orange-500 rounded hover:bg-orange-600"
-            >
-              Check Files
-            </button>
-            
-            <button 
-              onClick={useDirectTest} 
-              className="px-4 py-2 bg-red-500 rounded hover:bg-red-600"
-            >
-              Direct Test
-            </button>
-          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -685,108 +257,17 @@ export function SurveyPage() {
               Next Page
             </button>
           ) : (
-            <>
-              <button
-                className={`px-8 py-3 rounded-full transition-colors ${
-                  answers.every(answer => answer !== '')
-                    ? 'bg-green-500 hover:bg-green-600'
-                    : 'bg-gray-500 cursor-not-allowed'
-                }`}
-                onClick={handleSubmit}
-                disabled={!answers.every(answer => answer !== '')}
-              >
-                Submit Survey ({answers.filter(a => a !== '').length}/{questions.length})
-              </button>
-              
-              {/* Add a test button for debugging */}
-              <button
-                className="px-8 py-3 rounded-full bg-purple-500 hover:bg-purple-600 transition-colors"
-                onClick={testSurveySubmission}
-              >
-                Test Submit
-              </button>
-              
-              {/* Add a debug button */}
-              <button
-                className="px-8 py-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors"
-                onClick={debugApi}
-              >
-                Debug API
-              </button>
-              
-              {/* Add a file system check button */}
-              <button
-                className="px-8 py-3 rounded-full bg-orange-500 hover:bg-orange-600 transition-colors"
-                onClick={checkFileSystem}
-              >
-                Check Files
-              </button>
-              
-              {/* Add a direct test button */}
-              <button
-                className="px-8 py-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors"
-                onClick={useDirectTest}
-              >
-                Direct Test
-              </button>
-              <button
-                onClick={testUrlDebug}
-                className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-              >
-                URL Debug
-              </button>
-              <button
-                onClick={testPost}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Test POST
-              </button>
-              <button
-                onClick={testRoutes}
-                className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Test Routes
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="flex justify-between mt-8">
-          <button
-            onClick={handlePrevious}
-            className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded ${
-              currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            disabled={currentPage === 0 || loading}
-          >
-            Previous
-          </button>
-          
-          {currentPage < maxPages - 1 ? (
             <button
-              onClick={handleNext}
-              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-              disabled={loading}
+              className={`px-8 py-3 rounded-full transition-colors ${
+                answers.every(answer => answer !== '')
+                  ? 'bg-green-500 hover:bg-green-600'
+                  : 'bg-gray-500 cursor-not-allowed'
+              }`}
+              onClick={handleSubmit}
+              disabled={!answers.every(answer => answer !== '')}
             >
-              Next
+              Submit Survey ({answers.filter(a => a !== '').length}/{questions.length})
             </button>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                onClick={checkHealth}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                disabled={loading}
-              >
-                Check Health
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                disabled={loading}
-              >
-                {loading ? 'Submitting...' : 'Submit'}
-              </button>
-            </div>
           )}
         </div>
 
@@ -794,50 +275,8 @@ export function SurveyPage() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
             <strong className="font-bold">Error: </strong>
             <span className="block sm:inline">{error}</span>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                onClick={checkHealth}
-                className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Check Health
-              </button>
-              <button
-                onClick={checkFileSystem}
-                className="bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Check Files
-              </button>
-              <button
-                onClick={debugApi}
-                className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Debug API
-              </button>
-              <button
-                onClick={useDirectTest}
-                className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
-              >
-                Direct Test
-              </button>
-            </div>
           </div>
         )}
-
-        {/* Add test buttons for debugging */}
-        <div className="mt-8 flex justify-center space-x-4">
-          <button
-            onClick={handleTestSubmit}
-            className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Test Submission
-          </button>
-          <button
-            onClick={handleDiagnosticTest}
-            className="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
-          >
-            Diagnostic Test
-          </button>
-        </div>
       </div>
     </div>
   );
