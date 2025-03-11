@@ -1266,14 +1266,5 @@ async def test_endpoint():
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Get port from environment variable or use default
-    port = int(os.getenv("PORT", 8000))
-    
-    logger.info(f"Starting server on port {port}")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=False  # Disable reload in production
-    )
+    port = int(os.environ.get("PORT", 8080))  # Use environment variable or default to 8080
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
