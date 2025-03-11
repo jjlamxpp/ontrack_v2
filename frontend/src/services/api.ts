@@ -80,105 +80,49 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         const normalizedAnswers = answers.map(answer => {
             if (typeof answer !== 'string') {
                 console.warn('Non-string answer found:', answer);
-                return '';
+                return 'NO'; // Default to NO for non-string answers
             }
             return answer.toUpperCase();
         });
         
         console.log('Normalized answers before submission:', normalizedAnswers);
         
-        // Construct the correct URL for the survey submission endpoint
-        // Use the absolute URL to avoid any path issues
-        const url = `${window.location.origin}/api/survey/submit`;
-        console.log('Submitting survey to:', url);
+        // Try multiple approaches in sequence until one works
         
-        // Add a timeout to the fetch request
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-        
+        // 1. First try the diagnostic endpoint which has the most robust error handling
         try {
-            // Ensure the request body matches exactly what the backend expects
-            const requestBody = {
-                answers: normalizedAnswers
-            };
-            
-            console.log('Making POST request with the following options:');
-            console.log('- Method: POST');
-            console.log('- Headers: Content-Type: application/json');
-            console.log('- Body:', JSON.stringify(requestBody));
-            
-            // Try using XMLHttpRequest as an alternative to fetch
-            return new Promise<AnalysisResult>((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', url, true);
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.setRequestHeader('Accept', 'application/json');
-                xhr.timeout = 30000; // 30 second timeout
-                
-                xhr.onload = function() {
-                    clearTimeout(timeoutId);
-                    console.log('Survey submission response status:', xhr.status);
-                    console.log('Survey submission response headers:', xhr.getAllResponseHeaders());
-                    
-                    try {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            const data = JSON.parse(xhr.responseText);
-                            console.log('Response data received:', data);
-                            
-                            // Validate the result structure
-                            if (!data || typeof data !== 'object') {
-                                console.error('Invalid result format:', data);
-                                resolve(getFallbackResult());
-                                return;
-                            }
-                            
-                            // Check if we have the expected fields
-                            if (!data.personality || !data.industries) {
-                                console.error('Missing required fields in result:', data);
-                                resolve(getFallbackResult());
-                                return;
-                            }
-                            
-                            resolve(data);
-                        } else {
-                            console.error('Error response:', xhr.status);
-                            try {
-                                const data = JSON.parse(xhr.responseText);
-                                console.error('Error data:', data);
-                                
-                                // If we got a valid result structure despite the error status, use it
-                                if (data && data.personality && data.industries) {
-                                    console.log('Using result from error response as it has valid structure');
-                                    resolve(data);
-                                    return;
-                                }
-                            } catch (e) {
-                                console.error('Error parsing error response:', e);
-                            }
-                            
-                            resolve(getFallbackResult());
-                        }
-                    } catch (e) {
-                        console.error('Error processing response:', e);
-                        resolve(getFallbackResult());
-                    }
-                };
-                
-                xhr.onerror = function() {
-                    clearTimeout(timeoutId);
-                    console.error('XHR error occurred');
-                    resolve(getFallbackResult());
-                };
-                
-                xhr.ontimeout = function() {
-                    console.error('XHR request timed out');
-                    resolve(getFallbackResult());
-                };
-                
-                xhr.send(JSON.stringify(requestBody));
-            });
-            
-            /* Original fetch implementation - commented out for now
+            console.log('Trying diagnostic endpoint first...');
+            const diagnosticResult = await diagnosticSubmit(normalizedAnswers);
+            console.log('Diagnostic submission successful:', diagnosticResult);
+            return diagnosticResult;
+        } catch (diagnosticError) {
+            console.warn('Diagnostic submission failed, trying next method:', diagnosticError);
+        }
+        
+        // 2. Then try the direct test endpoint
+        try {
+            console.log('Trying direct test endpoint...');
+            const directTestResult = await directTest(normalizedAnswers);
+            console.log('Direct test successful:', directTestResult);
+            return directTestResult;
+        } catch (directTestError) {
+            console.warn('Direct test failed, trying next method:', directTestError);
+        }
+        
+        // 3. Finally try the regular submission endpoint
+        const url = `${window.location.origin}/api/survey/submit`;
+        console.log('Trying regular submission endpoint:', url);
+        
+        // Create the request body
+        const requestBody = {
+            answers: normalizedAnswers
+        };
+        
+        console.log('Request body:', JSON.stringify(requestBody));
+        
+        // Try using fetch
+        try {
+            console.log('Attempting submission with fetch...');
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -186,84 +130,35 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
                     'Accept': 'application/json'
                 },
                 body: JSON.stringify(requestBody),
-                signal: controller.signal,
                 mode: 'cors',
                 credentials: 'same-origin'
             });
             
-            clearTimeout(timeoutId);
+            console.log('Fetch response status:', response.status);
             
-            // Log the response status
-            console.log('Survey submission response status:', response.status);
-            console.log('Survey submission response headers:', response.headers);
-            
-            // Try to parse the response as JSON regardless of status code
-            let data;
-            try {
-                data = await response.json();
-                console.log('Response data received:', data);
-            } catch (jsonError) {
-                console.error('Error parsing JSON response:', jsonError);
+            // If the response is successful, parse and return the data
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Fetch response data:', data);
                 
-                // Try to get the response text
-                try {
-                    const text = await response.text();
-                    console.error('Response text:', text);
-                } catch (textError) {
-                    console.error('Error getting response text:', textError);
-                }
-                
-                // Return a fallback result
-                return getFallbackResult();
-            }
-            
-            // Check if the response was successful
-            if (!response.ok) {
-                console.error('Error response:', response.status, data);
-                
-                // If we got a JSON response with an error message, log it
-                if (data && data.detail) {
-                    console.error(`API error: ${data.detail}`);
-                }
-                
-                // If we got a valid result structure despite the error status, use it
+                // Validate the result structure
                 if (data && data.personality && data.industries) {
-                    console.log('Using result from error response as it has valid structure');
                     return data;
+                } else {
+                    console.warn('Invalid result structure from fetch');
                 }
-                
-                // Otherwise return a fallback result
-                return getFallbackResult();
-            }
-            
-            // Validate the result structure
-            if (!data || typeof data !== 'object') {
-                console.error('Invalid result format:', data);
-                return getFallbackResult();
-            }
-            
-            // Check if we have the expected fields
-            if (!data.personality || !data.industries) {
-                console.error('Missing required fields in result:', data);
-                return getFallbackResult();
-            }
-            
-            return data;
-            */
-        } catch (fetchError: any) {
-            if (fetchError.name === 'AbortError') {
-                console.error('Request timed out after 30 seconds');
             } else {
-                console.error('Fetch error:', fetchError);
+                console.warn('Fetch request failed with status:', response.status);
             }
-            
-            // Return a fallback result
-            return getFallbackResult();
-        } finally {
-            clearTimeout(timeoutId);
+        } catch (fetchError) {
+            console.warn('Fetch request failed:', fetchError);
         }
+        
+        // If all methods fail, return the fallback result
+        console.warn('All submission methods failed, using fallback result');
+        return getFallbackResult();
     } catch (error) {
-        console.error('Error submitting survey:', error);
+        console.error('Unhandled error in submitSurveyAndGetAnalysis:', error);
         return getFallbackResult();
     }
 }
@@ -604,5 +499,67 @@ export async function testSurveySubmit(answers: string[]): Promise<any> {
     } catch (error) {
         console.error('Error in test survey submission:', error);
         return { error: String(error) };
+    }
+}
+
+// Diagnostic test for survey submission
+export async function diagnosticSubmit(answers: string[]): Promise<any> {
+    try {
+        console.log('Running diagnostic submission...');
+        
+        // Ensure all answers are strings and normalize them
+        const normalizedAnswers = answers.map(answer => {
+            if (typeof answer !== 'string') {
+                console.warn('Non-string answer found:', answer);
+                return 'NO'; // Default to NO for non-string answers
+            }
+            return answer.toUpperCase();
+        });
+        
+        console.log('Normalized answers for diagnostic:', normalizedAnswers);
+        
+        // Construct the URL for the diagnostic endpoint
+        const url = `${window.location.origin}/api/diagnostic-submit`;
+        console.log('Submitting to diagnostic endpoint:', url);
+        
+        // Create the request body
+        const requestBody = {
+            answers: normalizedAnswers
+        };
+        
+        console.log('Diagnostic request body:', JSON.stringify(requestBody));
+        
+        // Make the request
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        console.log('Diagnostic response status:', response.status);
+        
+        // Try to parse the response as JSON
+        try {
+            const data = await response.json();
+            console.log('Diagnostic response data:', data);
+            
+            // If the diagnostic was successful and returned a result, use it
+            if (data.status === 'success' && data.result) {
+                return data.result;
+            } else if (data.fallback_result) {
+                return data.fallback_result;
+            } else {
+                return getFallbackResult();
+            }
+        } catch (jsonError) {
+            console.error('Error parsing diagnostic response:', jsonError);
+            return getFallbackResult();
+        }
+    } catch (error) {
+        console.error('Error in diagnostic submission:', error);
+        return getFallbackResult();
     }
 }
