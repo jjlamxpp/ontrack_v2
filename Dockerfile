@@ -18,8 +18,7 @@ COPY frontend/ ./
 RUN echo 'interface ImportMeta { env: Record<string, any>; }' > src/vite-env-fix.d.ts
 
 # Build the frontend with TypeScript checks disabled
-RUN npx tsc --skipLibCheck || echo "TypeScript check failed, but continuing build" && \
-    npm run build
+RUN NODE_ENV=production npx vite build
 
 # Use Python image for the backend
 FROM python:3.9-slim
@@ -46,7 +45,7 @@ COPY . .
 RUN mkdir -p /app/app/static /app/app/database
 
 # Copy the built frontend from the frontend-build stage
-COPY --from=frontend-build /app/frontend/dist /app/app/static
+COPY --from=frontend-build /app/frontend/dist /app/frontend/dist
 
 # Make port 8080 available
 EXPOSE 8080
