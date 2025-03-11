@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest, testPostEndpoint, debugRoutes } from '../services/api';
+import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest, testPostEndpoint, debugRoutes, testSurveySubmit } from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -417,6 +417,56 @@ export function SurveyPage() {
     }
   };
 
+  const handleTestSubmit = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Log the current state of answers
+      console.log('Testing submission with current answers:', answers);
+      
+      // Validate that we have all answers
+      const missingAnswers = questions.filter((_, index) => !answers[index]);
+      if (missingAnswers.length > 0) {
+        console.log('Missing answers for questions:', missingAnswers);
+        setError('Please answer all questions before testing.');
+        setLoading(false);
+        return;
+      }
+      
+      // Ensure all answers are valid strings
+      const validatedAnswers = answers.map(answer => {
+        if (!answer || typeof answer !== 'string') {
+          console.warn('Invalid answer found:', answer);
+          return 'NO'; // Default to 'NO' for invalid answers
+        }
+        return answer;
+      });
+      
+      // Normalize answers to uppercase
+      const normalizedAnswers = validatedAnswers.map(answer => answer.toUpperCase());
+      console.log('Normalized answers for test:', normalizedAnswers);
+      
+      // Test the survey submission
+      console.log('Testing survey submission...');
+      try {
+        const result = await testSurveySubmit(normalizedAnswers);
+        console.log('Test survey submission result:', result);
+        
+        // Show the result to the user
+        setError(`Test result: ${JSON.stringify(result)}`);
+      } catch (testError) {
+        console.error('Error during test survey submission:', testError);
+        setError(`Test error: ${String(testError)}`);
+      }
+    } catch (error) {
+      console.error('Unhandled error in handleTestSubmit:', error);
+      setError('An error occurred while testing your survey submission.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
@@ -679,6 +729,16 @@ export function SurveyPage() {
             </div>
           </div>
         )}
+
+        {/* Add test button for debugging */}
+        <div className="mt-8 flex justify-center">
+          <button
+            onClick={handleTestSubmit}
+            className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Test Submission
+          </button>
+        </div>
       </div>
     </div>
   );
