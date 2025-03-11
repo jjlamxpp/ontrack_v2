@@ -1,6 +1,15 @@
 import { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { fetchQuestions, submitSurveyAndGetAnalysis, checkApiHealth, debugUrlTest, testPostEndpoint, debugRoutes, testSurveySubmit } from '../services/api';
+import { 
+  fetchQuestions, 
+  submitSurveyAndGetAnalysis, 
+  checkApiHealth, 
+  debugUrlTest, 
+  testPostEndpoint, 
+  debugRoutes, 
+  testSurveySubmit,
+  diagnosticSubmit
+} from '../services/api';
 import type { Question } from '../types/survey';
 import { Progress } from '@/components/ui/progress';
 import { ApiContext } from '../App';
@@ -143,34 +152,59 @@ export function SurveyPage() {
       
       // Submit the survey and get analysis
       console.log('Submitting survey...');
+      
+      // Try multiple approaches in sequence
+      let result;
+      
+      // First try the main submission method
       try {
-        const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
+        console.log('Trying main submission method...');
+        result = await submitSurveyAndGetAnalysis(normalizedAnswers);
         console.log('Survey submission successful:', result);
-        
-        // Store the result in localStorage
-        localStorage.setItem('analysisResult', JSON.stringify(result));
-        
-        // Clear the survey answers
-        localStorage.removeItem('surveyAnswers');
-        
-        // Navigate to the result page
-        navigate('/result');
       } catch (submitError) {
         console.error('Error during survey submission:', submitError);
         
-        // Even if there's an error, we'll still try to get a result
-        // The API service should now return a fallback result
-        const result = await submitSurveyAndGetAnalysis(normalizedAnswers);
-        
-        // Store the result in localStorage
-        localStorage.setItem('analysisResult', JSON.stringify(result));
-        
-        // Clear the survey answers
-        localStorage.removeItem('surveyAnswers');
-        
-        // Navigate to the result page
-        navigate('/result');
+        // If the main submission fails, try the diagnostic endpoint
+        try {
+          console.log('Trying diagnostic endpoint...');
+          result = await diagnosticSubmit(normalizedAnswers);
+          console.log('Diagnostic submission successful:', result);
+        } catch (diagnosticError) {
+          console.error('Diagnostic submission failed:', diagnosticError);
+          
+          // If the diagnostic endpoint fails, try the direct test
+          try {
+            console.log('Trying direct test as last resort...');
+            const { directTest } = await import('../services/api');
+            result = await directTest(normalizedAnswers);
+            console.log('Direct test successful:', result);
+          } catch (directTestError) {
+            console.error('All submission methods failed:', directTestError);
+            setError('Survey submission failed after trying all methods. Please try again or use one of the debug options below.');
+            setLoading(false);
+            return;
+          }
+        }
       }
+      
+      if (!result || !result.personality || !result.industries) {
+        console.error('Invalid result structure:', result);
+        setError('Received invalid result from server. Please try again or use one of the debug options below.');
+        setLoading(false);
+        return;
+      }
+      
+      // Store the result in localStorage
+      localStorage.setItem('analysisResult', JSON.stringify(result));
+      console.log('Analysis result stored in localStorage');
+      
+      // Clear the survey answers
+      localStorage.removeItem('surveyAnswers');
+      console.log('Survey answers cleared from localStorage');
+      
+      // Navigate to the result page
+      console.log('Navigating to result page...');
+      navigate('/result');
     } catch (error) {
       console.error('Unhandled error in handleSubmit:', error);
       setError('An error occurred while submitting your survey. Please try again or use one of the debug options below.');
@@ -467,6 +501,65 @@ export function SurveyPage() {
     }
   };
 
+  const handleDiagnosticTest = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Log the current state of answers
+      console.log('Testing diagnostic submission with current answers:', answers);
+      
+      // Validate that we have all answers
+      const missingAnswers = questions.filter((_, index) => !answers[index]);
+      if (missingAnswers.length > 0) {
+        console.log('Missing answers for questions:', missingAnswers);
+        setError('Please answer all questions before testing.');
+        setLoading(false);
+        return;
+      }
+      
+      // Ensure all answers are valid strings
+      const validatedAnswers = answers.map(answer => {
+        if (!answer || typeof answer !== 'string') {
+          console.warn('Invalid answer found:', answer);
+          return 'NO'; // Default to 'NO' for invalid answers
+        }
+        return answer;
+      });
+      
+      // Normalize answers to uppercase
+      const normalizedAnswers = validatedAnswers.map(answer => answer.toUpperCase());
+      console.log('Normalized answers for diagnostic test:', normalizedAnswers);
+      
+      // Test the diagnostic submission
+      console.log('Testing diagnostic submission...');
+      try {
+        const result = await diagnosticSubmit(normalizedAnswers);
+        console.log('Diagnostic submission result:', result);
+        
+        // Show the result to the user
+        setError(`Diagnostic test successful. Result: ${JSON.stringify(result).substring(0, 100)}...`);
+        
+        // Store the result in localStorage
+        localStorage.setItem('analysisResult', JSON.stringify(result));
+        
+        // Ask the user if they want to proceed to the result page
+        if (window.confirm('Diagnostic test successful! Would you like to view the result?')) {
+          // Navigate to the result page
+          navigate('/result');
+        }
+      } catch (testError) {
+        console.error('Error during diagnostic submission:', testError);
+        setError(`Diagnostic test error: ${String(testError)}`);
+      }
+    } catch (error) {
+      console.error('Unhandled error in handleDiagnosticTest:', error);
+      setError('An error occurred while testing your diagnostic submission.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen w-full bg-[#1B2541] text-white flex items-center justify-center">
@@ -730,13 +823,19 @@ export function SurveyPage() {
           </div>
         )}
 
-        {/* Add test button for debugging */}
-        <div className="mt-8 flex justify-center">
+        {/* Add test buttons for debugging */}
+        <div className="mt-8 flex justify-center space-x-4">
           <button
             onClick={handleTestSubmit}
             className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
           >
             Test Submission
+          </button>
+          <button
+            onClick={handleDiagnosticTest}
+            className="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Diagnostic Test
           </button>
         </div>
       </div>
