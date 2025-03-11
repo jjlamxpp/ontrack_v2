@@ -251,8 +251,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Explicitly list all methods
     allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
 )
 
 # Add trusted host middleware
@@ -548,7 +549,7 @@ async def submit_survey(survey_data: SurveyRequest):
             # If that doesn't exist, try the relative path for local development
             if not os.path.exists(db_path):
                 logger.info(f"Database not found at {db_path}, trying relative path")
-                db_path = "app/database/Database.xlsx"
+                db_path = "/app/database/Database.xlsx"
                 
                 # If that doesn't exist either, try another common location
                 if not os.path.exists(db_path):
@@ -1193,6 +1194,75 @@ async def diagnostic_submit(request: Request):
         logger.error(f"Unexpected error in diagnostic_submit: {str(e)}")
         logger.exception("Exception details:")
         return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+
+# Add a debug endpoint
+@app.get("/api/debug")
+async def debug_info():
+    """
+    Return debug information about the server.
+    """
+    try:
+        # Collect debug information
+        debug_info = {
+            "server_info": {
+                "python_version": sys.version,
+                "current_directory": os.getcwd(),
+                "base_dir": str(BASE_DIR),
+                "app_dir": str(APP_DIR),
+                "frontend_dir": str(frontend_dir),
+                "frontend_build_dir": str(frontend_build_dir),
+            },
+            "environment": {
+                "env_vars": {k: v for k, v in os.environ.items() if not k.startswith("_")},
+            },
+            "directories": {
+                "current_dir_contents": os.listdir(os.getcwd()),
+                "app_dir_contents": os.listdir(str(APP_DIR)) if APP_DIR.exists() else "Directory not found",
+                "frontend_dir_contents": os.listdir(str(frontend_dir)) if frontend_dir.exists() else "Directory not found",
+            }
+        }
+        
+        # Try to check if the database file exists
+        db_paths = [
+            "/app/app/database/Database.xlsx",
+            "/app/database/Database.xlsx",
+            "database/Database.xlsx",
+            "Database.xlsx",
+            str(BASE_DIR / "app" / "database" / "Database.xlsx"),
+        ]
+        
+        db_status = {}
+        for path in db_paths:
+            db_status[path] = os.path.exists(path)
+        
+        debug_info["database"] = {
+            "db_paths_status": db_status
+        }
+        
+        return debug_info
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {str(e)}")
+        return {"error": str(e), "traceback": traceback.format_exc()}
+
+# Add a test endpoint
+@app.get("/api/survey/test")
+async def test_endpoint():
+    """
+    Test endpoint to check if the API is working.
+    """
+    try:
+        return {
+            "status": "success",
+            "message": "API is working correctly",
+            "timestamp": str(pd.Timestamp.now()),
+            "server_info": {
+                "python_version": sys.version,
+                "current_directory": os.getcwd(),
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error in test endpoint: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
