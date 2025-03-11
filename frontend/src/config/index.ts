@@ -1,6 +1,6 @@
 export const config = {
-  // Use a relative URL to avoid path issues with proxies
-  API_URL: '',
+  // Use environment variable with fallback to relative URL
+  API_URL: import.meta.env.VITE_API_URL || '/api',
   ENV: import.meta.env.VITE_ENV || 'production'
 };
 
