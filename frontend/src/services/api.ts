@@ -44,30 +44,6 @@ export async function fetchQuestions(): Promise<Question[]> {
     }
 }
 
-// Add a debug function to test the API
-export async function debugSurveyTest(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/debug/survey-test`;
-        console.log('Testing survey API at:', url);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.error(`Debug test failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Debug test failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Debug test result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in debug test:', error);
-        throw error;
-    }
-}
-
 // Submit survey and get analysis
 export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<AnalysisResult> {
     try {
@@ -87,31 +63,9 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         
         console.log('Normalized answers before submission:', normalizedAnswers);
         
-        // Try multiple approaches in sequence until one works
-        
-        // 1. First try the diagnostic endpoint which has the most robust error handling
-        try {
-            console.log('Trying diagnostic endpoint first...');
-            const diagnosticResult = await diagnosticSubmit(normalizedAnswers);
-            console.log('Diagnostic submission successful:', diagnosticResult);
-            return diagnosticResult;
-        } catch (diagnosticError) {
-            console.warn('Diagnostic submission failed, trying next method:', diagnosticError);
-        }
-        
-        // 2. Then try the direct test endpoint
-        try {
-            console.log('Trying direct test endpoint...');
-            const directTestResult = await directTest(normalizedAnswers);
-            console.log('Direct test successful:', directTestResult);
-            return directTestResult;
-        } catch (directTestError) {
-            console.warn('Direct test failed, trying next method:', directTestError);
-        }
-        
-        // 3. Finally try the regular submission endpoint
+        // Construct the URL for the survey submission endpoint
         const url = `${window.location.origin}/api/survey/submit`;
-        console.log('Trying regular submission endpoint:', url);
+        console.log('Submitting survey to:', url);
         
         // Create the request body
         const requestBody = {
@@ -120,45 +74,44 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         
         console.log('Request body:', JSON.stringify(requestBody));
         
-        // Try using fetch
-        try {
-            console.log('Attempting submission with fetch...');
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify(requestBody),
-                mode: 'cors',
-                credentials: 'same-origin'
-            });
-            
-            console.log('Fetch response status:', response.status);
-            
-            // If the response is successful, parse and return the data
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Fetch response data:', data);
-                
-                // Validate the result structure
-                if (data && data.personality && data.industries) {
-                    return data;
-                } else {
-                    console.warn('Invalid result structure from fetch');
-                }
-            } else {
-                console.warn('Fetch request failed with status:', response.status);
-            }
-        } catch (fetchError) {
-            console.warn('Fetch request failed:', fetchError);
-        }
+        // Make the request
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(requestBody),
+            mode: 'cors',
+            credentials: 'same-origin'
+        });
         
-        // If all methods fail, return the fallback result
-        console.warn('All submission methods failed, using fallback result');
-        return getFallbackResult();
+        console.log('Survey submission response status:', response.status);
+        
+        // Try to parse the response as JSON
+        try {
+            const data = await response.json();
+            console.log('Response data received:', data);
+            
+            // Validate the result structure
+            if (!data || typeof data !== 'object') {
+                console.error('Invalid result format:', data);
+                return getFallbackResult();
+            }
+            
+            // Check if we have the expected fields
+            if (!data.personality || !data.industries) {
+                console.error('Missing required fields in result:', data);
+                return getFallbackResult();
+            }
+            
+            return data;
+        } catch (jsonError) {
+            console.error('Error parsing JSON response:', jsonError);
+            return getFallbackResult();
+        }
     } catch (error) {
-        console.error('Unhandled error in submitSurveyAndGetAnalysis:', error);
+        console.error('Error submitting survey:', error);
         return getFallbackResult();
     }
 }
@@ -256,310 +209,5 @@ export async function getSchoolLogo(school: string): Promise<string> {
 export function cleanupBlobUrl(url: string): void {
     if (url && url.startsWith('blob:')) {
         URL.revokeObjectURL(url);
-    }
-}
-
-// Debug file system
-export async function debugFileSystem(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/debug/file-system`;
-        console.log('Debugging file system at:', url);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.error(`Debug file system failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Debug file system failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Debug file system result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in debug file system:', error);
-        throw error;
-    }
-}
-
-// Direct test for survey submission
-export async function directTest(answers: string[]): Promise<AnalysisResult> {
-    try {
-        const url = `${window.location.origin}/api/direct-test`;
-        console.log('Direct testing at:', url);
-        console.log('Answers being submitted:', answers);
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ answers })
-        });
-        
-        if (!response.ok) {
-            console.error(`Direct test failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Direct test failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Direct test result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in direct test:', error);
-        return getFallbackResult();
-    }
-}
-
-// Check API health
-export async function checkApiHealth(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/health`;
-        console.log('Checking API health at:', url);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.error(`Health check failed with status ${response.status}`);
-            return {
-                status: 'error',
-                message: `Health check failed with status ${response.status}`
-            };
-        }
-        
-        try {
-            const data = await response.json();
-            console.log('Health check data:', data);
-            return data;
-        } catch (jsonError) {
-            console.error('Error parsing health check response:', jsonError);
-            return {
-                status: 'error',
-                message: 'Failed to parse health check response'
-            };
-        }
-    } catch (error) {
-        console.error('Error checking API health:', error);
-        return {
-            status: 'error',
-            message: error instanceof Error ? error.message : 'Unknown error'
-        };
-    }
-}
-
-// Debug URL test
-export async function debugUrlTest(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/debug/url-test`;
-        console.log('Testing URL at:', url);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.error(`URL test failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`URL test failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('URL test result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in URL test:', error);
-        throw error;
-    }
-}
-
-// Test POST endpoint
-export async function testPostEndpoint(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/test-post`;
-        console.log('Testing POST endpoint at:', url);
-        
-        const testData = {
-            test: true,
-            message: "This is a test POST request",
-            timestamp: new Date().toISOString()
-        };
-        
-        console.log('Sending test data:', testData);
-        
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(testData)
-        });
-        
-        console.log('POST test response status:', response.status);
-        
-        if (!response.ok) {
-            console.error(`POST test failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`POST test failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('POST test result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in POST test:', error);
-        throw error;
-    }
-}
-
-// Debug routes
-export async function debugRoutes(): Promise<any> {
-    try {
-        const url = `${window.location.origin}/api/debug/routes`;
-        console.log('Debugging routes at:', url);
-        
-        const response = await fetch(url);
-        
-        if (!response.ok) {
-            console.error(`Debug routes failed with status ${response.status}`);
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Debug routes failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Debug routes result:', data);
-        return data;
-    } catch (error) {
-        console.error('Error in debug routes:', error);
-        throw error;
-    }
-}
-
-// Add a test function for survey submission
-export async function testSurveySubmit(answers: string[]): Promise<any> {
-    try {
-        console.log('Testing survey submission...');
-        
-        // Ensure all answers are strings and normalize them
-        const normalizedAnswers = answers.map(answer => {
-            if (typeof answer !== 'string') {
-                console.warn('Non-string answer found:', answer);
-                return '';
-            }
-            return answer.toUpperCase();
-        });
-        
-        console.log('Normalized answers for test:', normalizedAnswers);
-        
-        // Construct the URL for the test endpoint
-        const url = `${window.location.origin}/api/test-survey-submit`;
-        console.log('Testing survey submission at:', url);
-        
-        // Create the request body
-        const requestBody = {
-            answers: normalizedAnswers
-        };
-        
-        console.log('Test request body:', JSON.stringify(requestBody));
-        
-        // Make the request
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        console.log('Test response status:', response.status);
-        
-        // Try to parse the response as JSON
-        try {
-            const data = await response.json();
-            console.log('Test response data:', data);
-            return data;
-        } catch (jsonError) {
-            console.error('Error parsing test response:', jsonError);
-            
-            // Try to get the response text
-            try {
-                const text = await response.text();
-                console.error('Test response text:', text);
-                return { error: 'Error parsing JSON response', text };
-            } catch (textError) {
-                console.error('Error getting test response text:', textError);
-                return { error: 'Error getting response text' };
-            }
-        }
-    } catch (error) {
-        console.error('Error in test survey submission:', error);
-        return { error: String(error) };
-    }
-}
-
-// Diagnostic test for survey submission
-export async function diagnosticSubmit(answers: string[]): Promise<any> {
-    try {
-        console.log('Running diagnostic submission...');
-        
-        // Ensure all answers are strings and normalize them
-        const normalizedAnswers = answers.map(answer => {
-            if (typeof answer !== 'string') {
-                console.warn('Non-string answer found:', answer);
-                return 'NO'; // Default to NO for non-string answers
-            }
-            return answer.toUpperCase();
-        });
-        
-        console.log('Normalized answers for diagnostic:', normalizedAnswers);
-        
-        // Construct the URL for the diagnostic endpoint
-        const url = `${window.location.origin}/api/diagnostic-submit`;
-        console.log('Submitting to diagnostic endpoint:', url);
-        
-        // Create the request body
-        const requestBody = {
-            answers: normalizedAnswers
-        };
-        
-        console.log('Diagnostic request body:', JSON.stringify(requestBody));
-        
-        // Make the request
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        console.log('Diagnostic response status:', response.status);
-        
-        // Try to parse the response as JSON
-        try {
-            const data = await response.json();
-            console.log('Diagnostic response data:', data);
-            
-            // If the diagnostic was successful and returned a result, use it
-            if (data.status === 'success' && data.result) {
-                return data.result;
-            } else if (data.fallback_result) {
-                return data.fallback_result;
-            } else {
-                return getFallbackResult();
-            }
-        } catch (jsonError) {
-            console.error('Error parsing diagnostic response:', jsonError);
-            return getFallbackResult();
-        }
-    } catch (error) {
-        console.error('Error in diagnostic submission:', error);
-        return getFallbackResult();
     }
 }
