@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install TypeScript globally
+RUN npm install -g typescript
+
 # Set working directory
 WORKDIR /app
 
@@ -29,9 +32,13 @@ RUN ls -la && ls -la app && ls -la app/database || echo "Database directory not 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install frontend dependencies and build
+# Install frontend dependencies
 WORKDIR /app/frontend
-RUN npm install && npm run build
+RUN npm install
+
+# Build the frontend
+# Use npx to ensure we use the locally installed TypeScript
+RUN npx tsc && npx vite build
 
 # Return to app directory
 WORKDIR /app
