@@ -29,7 +29,7 @@ const handleApiError = async (response: Response, context: string) => {
 // Fetch questions from the API
 export async function fetchQuestions(): Promise<Question[]> {
     try {
-        const url = `${window.location.origin}/api/survey/questions`;
+        const url = `${API_BASE_URL}/survey/questions`;
         console.log('Fetching questions from:', url);
         
         const response = await fetch(url);
@@ -64,7 +64,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
         console.log('Normalized answers before submission:', normalizedAnswers);
         
         // Construct the URL for the survey submission endpoint
-        const url = `${window.location.origin}/api/survey/submit`;
+        const url = `${API_BASE_URL}/survey/submit`;
         console.log('Submitting survey to:', url);
         
         // Create the request body
@@ -83,7 +83,7 @@ export async function submitSurveyAndGetAnalysis(answers: string[]): Promise<Ana
             },
             body: JSON.stringify(requestBody),
             mode: 'cors',
-            credentials: 'same-origin'
+            credentials: 'include'
         });
         
         console.log('Survey submission response status:', response.status);
@@ -156,7 +156,7 @@ function getFallbackResult(): AnalysisResult {
 // Get character icon
 export async function getCharacterIcon(iconId: string): Promise<string> {
     try {
-        const url = `${window.location.origin}/api/survey/icon/${iconId}`;
+        const url = `${API_BASE_URL}/survey/icon/${iconId}`;
         console.log('Fetching character icon from:', url);
         
         const response = await fetch(url);
@@ -183,7 +183,7 @@ export async function getSchoolLogo(school: string): Promise<string> {
     try {
         // Encode the school name for the URL
         const encodedSchool = encodeURIComponent(school);
-        const url = `${window.location.origin}/api/survey/school-icon/${encodedSchool}`;
+        const url = `${API_BASE_URL}/survey/school-icon/${encodedSchool}`;
         console.log('Fetching school logo from:', url);
         
         const response = await fetch(url);
