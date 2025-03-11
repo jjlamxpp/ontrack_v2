@@ -669,6 +669,10 @@ async def submit_survey(survey_data: SurveyRequest):
         non_string_answers = [i for i, a in enumerate(survey_data.answers) if not isinstance(a, str)]
         if non_string_answers:
             logger.warning(f"Non-string answers found at indices: {non_string_answers}")
+            
+            # Convert non-string answers to strings
+            survey_data.answers = [str(a) if not isinstance(a, str) else a for a in survey_data.answers]
+            logger.info(f"Converted non-string answers to strings: {survey_data.answers}")
         
         # Try to process with the database
         try:
@@ -1421,6 +1425,48 @@ async def test_yes_no_submission():
             "message": f"Yes/No survey submission test failed: {str(e)}",
             "error_details": traceback.format_exc()
         }
+
+@app.post("/api/test-survey-submit")
+async def test_survey_submit(request: Request):
+    """
+    Test endpoint for survey submission.
+    Logs the raw request body and headers to help diagnose issues.
+    """
+    try:
+        # Log the request headers
+        logger.info("Test survey submit endpoint called")
+        logger.info(f"Request headers: {request.headers}")
+        
+        # Get the raw request body
+        body = await request.body()
+        logger.info(f"Raw request body: {body}")
+        
+        # Try to parse the body as JSON
+        try:
+            json_body = await request.json()
+            logger.info(f"Parsed JSON body: {json_body}")
+            
+            # Check if the body has the expected structure
+            if isinstance(json_body, dict) and "answers" in json_body:
+                answers = json_body["answers"]
+                logger.info(f"Found answers field with {len(answers)} items")
+                
+                # Check the types of the answers
+                answer_types = [f"{type(a).__name__}" for a in answers]
+                logger.info(f"Answer types: {answer_types}")
+                
+                # Return a success response
+                return {"status": "success", "message": "Test survey submission received successfully"}
+            else:
+                logger.warning("JSON body does not have the expected structure")
+                return {"status": "error", "message": "JSON body does not have the expected structure"}
+        except Exception as json_error:
+            logger.error(f"Error parsing JSON body: {str(json_error)}")
+            return {"status": "error", "message": f"Error parsing JSON body: {str(json_error)}"}
+    except Exception as e:
+        logger.error(f"Unexpected error in test_survey_submit: {str(e)}")
+        logger.exception("Exception details:")
+        return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
