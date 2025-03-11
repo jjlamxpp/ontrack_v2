@@ -13,8 +13,8 @@ export const ApiContext = createContext({
 function App() {
   // Set up API configuration - use environment variables with fallback
   const [apiConfig] = useState(() => {
-    // Use environment variable if available, otherwise use the Digital Ocean URL
-    const apiBaseUrl = import.meta.env.VITE_API_URL || 'https://ontrack-d4m7j.ondigitalocean.app/api';
+    // Use environment variable if available, otherwise use the default URL
+    const apiBaseUrl = import.meta.env.VITE_API_URL || '/api';
     
     console.log('API URL from environment:', import.meta.env.VITE_API_URL);
     console.log('Using API base URL:', apiBaseUrl);
