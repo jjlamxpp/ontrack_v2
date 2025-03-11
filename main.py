@@ -405,141 +405,6 @@ async def get_survey_questions():
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to load questions: {str(e)}")
 
-# Add a debug endpoint to check API functionality
-@app.get("/api/debug")
-async def api_debug():
-    routes = []
-    for route in app.routes:
-        routes.append({
-            "path": route.path,
-            "methods": getattr(route, "methods", ["GET"])
-        })
-    
-    return {
-        "status": "API is working", 
-        "routes": routes,
-        "base_dir": str(BASE_DIR),
-        "app_dir": str(APP_DIR)
-    }
-
-# Add a debug endpoint to check Excel file
-@app.get("/api/debug/excel")
-async def debug_excel():
-    """Debug endpoint to check Excel file"""
-    try:
-        # Path to the Excel file
-        excel_file = BASE_DIR / "app" / "database" / "Database.xlsx"
-        
-        # Check if file exists
-        file_exists = excel_file.exists()
-        
-        result = {
-            "file_path": str(excel_file),
-            "file_exists": file_exists,
-        }
-        
-        if file_exists:
-            # Get file size
-            result["file_size"] = os.path.getsize(excel_file)
-            
-            # List sheet names
-            try:
-                xls = pd.ExcelFile(excel_file)
-                result["sheet_names"] = xls.sheet_names
-                
-                # Get sample data from each sheet
-                sheets_data = {}
-                for sheet in xls.sheet_names:
-                    df = pd.read_excel(excel_file, sheet_name=sheet)
-                    sheets_data[sheet] = {
-                        "columns": df.columns.tolist(),
-                        "row_count": len(df),
-                        "sample_row": df.iloc[0].to_dict() if not df.empty else "No data"
-                    }
-                result["sheets_data"] = sheets_data
-            except Exception as e:
-                result["excel_error"] = str(e)
-        else:
-            # List directory contents
-            parent_dir = excel_file.parent
-            if parent_dir.exists():
-                result["parent_dir_contents"] = [str(p) for p in parent_dir.glob("*")]
-            else:
-                result["parent_dir_exists"] = False
-        
-        return result
-    except Exception as e:
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
-# Add a debug endpoint for API testing
-@app.get("/api/debug/test-api")
-async def test_api():
-    """Test endpoint to verify API functionality"""
-    logger.info("API test endpoint called")
-    
-    # Check for survey router
-    routers = [r for r in app.routes if hasattr(r, "path") and "/api/survey" in r.path]
-    
-    return {
-        "status": "ok",
-        "api_routes": [str(r.path) for r in app.routes if "/api/" in str(r.path)],
-        "survey_routes_count": len(routers),
-        "environment": {
-            "python_version": sys.version,
-            "working_directory": os.getcwd(),
-            "app_directory": str(APP_DIR),
-            "base_directory": str(BASE_DIR),
-        }
-    }
-
-# IMPORTANT: Define all API routes BEFORE mounting static files
-# This ensures that API routes are not blocked by static file handling
-
-# Add a simple test endpoint that always returns a success response
-@app.get("/api/test")
-async def test_api():
-    """Test endpoint to verify API connectivity"""
-    logger.info("Test API endpoint called")
-    return {"status": "ok", "message": "API is working"}
-
-# Add a test endpoint for survey submission
-@app.post("/api/test-submit")
-async def test_submit():
-    """Test endpoint to verify survey submission"""
-    logger.info("Test submit endpoint called")
-    return {
-        "personality": {
-            "type": "RI",
-            "description": "You are a logical and analytical thinker with a strong interest in understanding how things work.",
-            "interpretation": "Your combination of Realistic and Investigative traits suggests you enjoy solving practical problems through analysis and research.",
-            "enjoyment": [
-                "Working with technical systems",
-                "Analyzing complex problems",
-                "Learning new technical skills"
-            ],
-            "your_strength": [
-                "Logical thinking",
-                "Problem-solving",
-                "Technical aptitude"
-            ],
-            "iconId": "1",
-            "riasecScores": {"R": 5, "I": 4, "A": 2, "S": 1, "E": 3, "C": 2}
-        },
-        "industries": [{
-            "id": "RIA",
-            "name": "Engineering",
-            "overview": "Engineering involves applying scientific and mathematical principles to design and build systems, structures, and products.",
-            "trending": "Software engineering, biomedical engineering, and renewable energy engineering are rapidly growing fields.",
-            "insight": "Engineers are in high demand across various sectors, with opportunities for specialization and advancement.",
-            "examplePaths": [
-                "Software Engineer",
-                "Mechanical Engineer",
-                "Civil Engineer"
-            ],
-            "education": "Bachelor's degree in engineering or related field, with professional certification often required."
-        }]
-    }
-
 # NOW mount static files AFTER all API routes are defined
 # AFTER defining all API routes, THEN mount static files
 if frontend_build_dir.exists():
@@ -784,174 +649,6 @@ def get_fallback_result():
             "education": "Bachelor's degree in engineering or related field, with professional certification often required."
         }]
     }
-
-# Add a test endpoint to verify API functionality
-@app.get("/api/survey/test")
-async def test_survey_api():
-    """Test endpoint to verify API connectivity"""
-    logger.info("Test survey API endpoint called")
-    return {"status": "ok", "message": "Survey API is working"}
-
-# Add a debug endpoint to list all routes
-@app.get("/api/debug/routes")
-async def debug_routes():
-    """
-    Debug endpoint to list all registered routes.
-    """
-    try:
-        # Get all routes
-        routes = []
-        for route in app.routes:
-            route_info = {
-                "path": getattr(route, "path", "Unknown"),
-                "name": getattr(route, "name", "Unknown"),
-                "methods": getattr(route, "methods", ["Unknown"]),
-                "endpoint": str(getattr(route, "endpoint", "Unknown")),
-            }
-            routes.append(route_info)
-        
-        # Sort routes by path
-        routes.sort(key=lambda x: x["path"])
-        
-        # Return the routes
-        return {
-            "status": "success",
-            "message": "Routes listed successfully",
-            "routes": routes,
-            "routes_count": len(routes)
-        }
-    except Exception as e:
-        # Return error information
-        return {
-            "status": "error",
-            "message": f"Failed to list routes: {str(e)}",
-            "error_details": traceback.format_exc()
-        }
-
-# IMPORTANT: Make sure this code appears BEFORE any static file mounts or catch-all routes
-# Import the survey router
-from app.routers.survey import router as survey_router
-
-# Mount the survey router with the correct prefix
-app.include_router(
-    survey_router,
-    prefix="/api",  # This will make the endpoint available at /api/survey/questions
-    tags=["survey"]
-)
-
-# Add a catch-all route for OPTIONS requests to handle CORS preflight
-@app.options("/{full_path:path}")
-async def options_route(full_path: str):
-    """Handle OPTIONS requests for CORS preflight"""
-    logger.info(f"OPTIONS request for /{full_path}")
-    return {}
-
-# IMPORTANT: This must be the LAST route in your file - update to handle SPA routing
-@app.get("/{full_path:path}")
-async def serve_spa_routes(full_path: str):
-    """Serve the frontend for any path not matched by API routes"""
-    # Log the requested path
-    logger.info(f"Catch-all route handling: /{full_path}")
-    
-    # Skip API routes - they should have been handled by their own endpoints
-    if full_path.startswith("api/"):
-        logger.warning(f"API route not found: /{full_path}")
-        return JSONResponse(
-            status_code=404,
-            content={"error": "API endpoint not found"}
-        )
-    
-    # For all other paths, serve index.html to support SPA routing
-    # Try multiple possible locations for index.html
-    possible_index_paths = [
-        frontend_build_dir / "index.html",
-        frontend_dir / "index.html",
-        BASE_DIR / "frontend" / "dist" / "index.html",
-        BASE_DIR / "frontend" / "index.html",
-        BASE_DIR / "static" / "index.html"
-    ]
-    
-    for index_path in possible_index_paths:
-        if index_path.exists():
-            logger.info(f"Serving index.html from {index_path} for SPA route: /{full_path}")
-            return FileResponse(index_path)
-    
-    # If we can't find the frontend, return a 404
-    logger.warning(f"Frontend not found in any of the expected locations")
-    return JSONResponse(
-        status_code=404,
-        content={"detail": "Frontend not found"}
-    )
-
-# Add a more comprehensive health check
-@app.get("/debug/health")
-async def health_check():
-    # Check for index.html in various locations
-    index_locations = [
-        frontend_dir / "index.html",
-        frontend_dir / "dist" / "index.html",
-        BASE_DIR / "frontend" / "index.html",
-        BASE_DIR / "frontend" / "dist" / "index.html"
-    ]
-    
-    index_exists = {str(path): path.exists() for path in index_locations}
-    
-    # Check directory contents
-    directory_contents = {
-        "frontend_dir": list(map(str, frontend_dir.glob("*"))) if frontend_dir.exists() else "directory not found",
-        "frontend_dist": list(map(str, (frontend_dir / "dist").glob("*"))) if (frontend_dir / "dist").exists() else "directory not found",
-        "base_dir": list(map(str, BASE_DIR.glob("*"))) if BASE_DIR.exists() else "directory not found"
-    }
-    
-    return {
-        "status": "ok", 
-        "frontend_dir_exists": frontend_dir.exists(),
-        "index_html_locations": index_exists,
-        "directory_contents": directory_contents,
-        "python_version": sys.version,
-        "working_directory": os.getcwd(),
-        "app_directory": str(APP_DIR),
-        "base_directory": str(BASE_DIR),
-        "environment_variables": {k: v for k, v in os.environ.items() if k in ["BASE_DIR", "PORT", "PATH"]}
-    }
-
-@app.post("/api/test-post")
-async def test_post_endpoint(request: Request):
-    """
-    Simple test endpoint to verify that POST requests are working correctly.
-    """
-    try:
-        # Log the request
-        logger.info(f"Received test POST request")
-        
-        # Try to parse the request body
-        try:
-            body = await request.json()
-            logger.info(f"Request body: {body}")
-        except Exception as e:
-            logger.error(f"Error parsing request body: {str(e)}")
-            body = {"error": "Could not parse request body"}
-        
-        # Return a simple response
-        return {
-            "status": "success",
-            "message": "POST request received successfully",
-            "request_body": body,
-            "request_headers": dict(request.headers),
-            "request_method": request.method,
-            "request_url": str(request.url)
-        }
-    except Exception as e:
-        # Log the error
-        logger.error(f"Unexpected error in test_post_endpoint: {str(e)}")
-        logger.exception("Exception details:")
-        
-        # Return error information
-        return {
-            "status": "error",
-            "message": f"Test POST request failed: {str(e)}",
-            "error_details": traceback.format_exc()
-        }
 
 # Add a debug endpoint to check the database status
 @app.get("/api/debug/database")
@@ -1403,117 +1100,43 @@ async def debug_url_test(request: Request):
             "error_details": traceback.format_exc()
         }
 
-@app.get("/api/debug/test-survey-submission")
-async def test_survey_submission():
+@app.post("/api/test-post")
+async def test_post_endpoint(request: Request):
     """
-    Test endpoint to verify that the survey submission works.
-    """
-    try:
-        # Create a test survey response with 'yes' answers
-        test_answers = ["yes"] * 42 # 42 yes answers
-        
-        # Create a SurveyRequest object
-        survey_data = SurveyRequest(answers=test_answers)
-        
-        # Call the submit_survey function
-        result = await submit_survey(survey_data)
-        
-        # Return the result along with debug information
-        return {
-            "status": "success",
-            "message": "Survey submission test completed successfully",
-            "test_answers": test_answers,
-            "result": result,
-            "database_paths_tried": [
-                "/app/database/Database.xlsx",
-                "app/database/Database.xlsx",
-                "database/Database.xlsx",
-                "Database.xlsx"
-            ]
-        }
-    except Exception as e:
-        # Return error information
-        return {
-            "status": "error",
-            "message": f"Survey submission test failed: {str(e)}",
-            "error_details": traceback.format_exc()
-        }
-
-@app.get("/api/debug/test-yes-no-submission")
-async def test_yes_no_submission():
-    """
-    Test endpoint to verify that the survey submission works with yes/no answers.
+    Simple test endpoint to verify that POST requests are working correctly.
     """
     try:
-        # Create a test survey response with alternating 'YES' and 'NO' answers
-        test_answers = []
-        for i in range(42):  # 42 questions
-            test_answers.append("YES" if i % 2 == 0 else "NO")
+        # Log the request
+        logger.info(f"Received test POST request")
         
-        logger.info(f"Test answers: {test_answers}")
-        
-        # Create a SurveyRequest object
-        survey_data = SurveyRequest(answers=test_answers)
-        
-        # Call the submit_survey function
-        result = await submit_survey(survey_data)
-        
-        # Return the result along with debug information
-        return {
-            "status": "success",
-            "message": "Yes/No survey submission test completed successfully",
-            "test_answers": test_answers,
-            "result": result
-        }
-    except Exception as e:
-        # Return error information
-        return {
-            "status": "error",
-            "message": f"Yes/No survey submission test failed: {str(e)}",
-            "error_details": traceback.format_exc()
-        }
-
-@app.post("/api/test-survey-submit")
-async def test_survey_submit(request: Request):
-    """
-    Test endpoint for survey submission.
-    Logs the raw request body and headers to help diagnose issues.
-    """
-    try:
-        # Log the request headers
-        logger.info("Test survey submit endpoint called")
-        logger.info(f"Request headers: {request.headers}")
-        
-        # Get the raw request body
-        body = await request.body()
-        logger.info(f"Raw request body: {body}")
-        
-        # Try to parse the body as JSON
+        # Try to parse the request body
         try:
-            json_body = await request.json()
-            logger.info(f"Parsed JSON body: {json_body}")
-            
-            # Check if the body has the expected structure
-            if isinstance(json_body, dict) and "answers" in json_body:
-                answers = json_body["answers"]
-                logger.info(f"Found answers field with {len(answers)} items")
-                
-                # Check the types of the answers
-                answer_types = [f"{type(a).__name__}" for a in answers]
-                logger.info(f"Answer types: {answer_types}")
-                
-                # Return a success response
-                return {"status": "success", "message": "Test survey submission received successfully"}
-            else:
-                logger.warning("JSON body does not have the expected structure")
-                return {"status": "error", "message": "JSON body does not have the expected structure"}
-        except Exception as json_error:
-            logger.error(f"Error parsing JSON body: {str(json_error)}")
-            return {"status": "error", "message": f"Error parsing JSON body: {str(json_error)}"}
+            body = await request.json()
+            logger.info(f"Request body: {body}")
+        except Exception as e:
+            logger.error(f"Error parsing request body: {str(e)}")
+            body = {"error": "Could not parse request body"}
+        
+        # Return a simple response
+        return {
+            "status": "success",
+            "message": "POST request received successfully",
+            "request_body": body,
+            "request_headers": dict(request.headers),
+            "request_method": request.method,
+            "request_url": str(request.url)
+        }
     except Exception as e:
-        logger.error(f"Unexpected error in test_survey_submit: {str(e)}")
+        # Log the error
+        logger.error(f"Unexpected error in test_post_endpoint: {str(e)}")
         logger.exception("Exception details:")
-        return {"status": "error", "message": f"Unexpected error: {str(e)}"}
+        
+        # Return error information
+        return {
+            "status": "error",
+            "message": f"Test POST request failed: {str(e)}",
+            "error_details": traceback.format_exc()
+        }
 
 @app.post("/api/diagnostic-submit")
 async def diagnostic_submit(request: Request):
@@ -1547,7 +1170,7 @@ async def diagnostic_submit(request: Request):
             
             # Try to parse as JSON
             json_body = await request.json()
-            logger.info(f"Request body (JSON): {json_body}")
+            logger.info(f"Parsed JSON body: {json_body}")
             
             # Check if it has the expected structure
             if isinstance(json_body, dict) and "answers" in json_body:
@@ -1558,39 +1181,18 @@ async def diagnostic_submit(request: Request):
                 answer_types = [f"{type(a).__name__}" for a in answers]
                 logger.info(f"Answer types: {answer_types}")
                 
-                # Try to process the survey
-                try:
-                    # Convert all answers to strings
-                    string_answers = [str(a) for a in answers]
-                    
-                    # Create a SurveyRequest object
-                    survey_data = SurveyRequest(answers=string_answers)
-                    
-                    # Call the direct_test function
-                    result = await direct_test(survey_data)
-                    logger.info("Successfully processed survey with direct_test")
-                    
-                    return {
-                        "status": "success",
-                        "message": "Survey processed successfully",
-                        "result": result
-                    }
-                except Exception as process_error:
-                    logger.error(f"Error processing survey: {str(process_error)}")
-                    logger.exception("Exception details:")
+                # Return a success response
+                return {"status": "success", "message": "Test survey submission received successfully"}
             else:
                 logger.warning("JSON body does not have the expected structure")
+                return {"status": "error", "message": "JSON body does not have the expected structure"}
         except Exception as json_error:
             logger.error(f"Error parsing body as JSON: {str(json_error)}")
-    except Exception as body_error:
-        logger.error(f"Error getting request body: {str(body_error)}")
-    
-    # Return a fallback result
-    return {
-        "status": "error",
-        "message": "Could not process survey submission",
-        "fallback_result": get_fallback_result()
-    }
+            return {"status": "error", "message": f"Error parsing body as JSON: {str(json_error)}"}
+    except Exception as e:
+        logger.error(f"Unexpected error in diagnostic_submit: {str(e)}")
+        logger.exception("Exception details:")
+        return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
